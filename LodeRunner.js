@@ -19,6 +19,7 @@ implementação que possam ser menos óbvios para o avaliador.
 
 // tente não definir mais nenhuma variável global
 
+
 let empty, hero, control;
 
 // ACTORS
