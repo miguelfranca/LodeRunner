@@ -53,6 +53,9 @@ class Actor
     isClimbable (){
         return false;
     }
+    /*canBePassedThrough(){
+        return true;
+    } */
 }
 
 class PassiveActor extends Actor
@@ -69,6 +72,9 @@ class PassiveActor extends Actor
         empty.draw(this.x, this.y);
     }
 
+    isGrabable (){
+        return false;
+    }
 }
 
 class ActiveActor extends Actor
@@ -159,6 +165,7 @@ class Rope extends PassiveActor
     {
         super(x, y, "rope");
     }
+    isGrabable (){ return true; }
 }
 
 class Stone extends PassiveActor
@@ -186,26 +193,38 @@ class Hero extends ActiveActor
     }
     move (dx, dy){
         let next = control.gameState.get(this.x+dx, this.y+dy);
-        let current = control.gameState.get (this.x, this.y);
+        let current = control.gameState.getBehind (this.x, this.y);
         if ((dy < 0 && !current.isClimbable()))
             return;
         if (!next.isBoundary () ){
-            this.hide();
-            this.x += dx;
-            this.y += dy;
-            this.show();
+            this.updateMove (dx, dy);
         }
     }
-
+    updateMove (dx,dy){
+        this.hide();
+        this.x += dx;
+        this.y += dy;
+        this.show();
+    }
     isFalling (){
-        let behind = control.getBehind(this.x, this.y);
-        let atFeet = control.get(this.x, this.y+1);
-        //depois e preciso verificar se esta nos sitios em que se pode cair
+        let behind = control.gameState.getBehind(this.x, this.y);
+        let atFeet = control.gameState.get(this.x, this.y+1);
+        if (behind.isGrabable())
+            return false;
+        if (!atFeet.isBoundary() && !atFeet.isClimbable() && !behind.isClimbable())
+            return true;
+
         return false;
     }
+
     animation()
     {
         let k = control.gameState.getKey();
+        if (this.isFalling()){
+            if (control.gameState.time%3 == 0)  //serve para atrasar o movimento de queda
+                this.updateMove (0,1);
+            return;
+        }
         if (k == ' ')
         {
             alert('SHOOT');
@@ -403,16 +422,30 @@ class GameState extends State
     }
 
     get (x, y){
-        if ( !this.isInside (x, y) ){
+        /*if ( !this.isInside (x, y) ){
             return this.boundaryStone;
+        }*/
+        let aux = this.getBehind (x, y);
+        if (aux !== this.boundaryStone && control.gameState.worldActive[x][y] !== empty){
+            return control.gameState.worldActive[x][y];
         }
+        else 
+            return aux;
+
+/*
         else if (control.gameState.worldActive[x][y] !== empty){
             return control.gameState.worldActive[x][y];
         }
         else 
             return control.gameState.world[x][y];
+        */
     }
-
+    getBehind (x, y){
+        if ( !this.isInside (x, y) ){
+            return this.boundaryStone;
+        }
+        return control.gameState.world[x][y];
+    }
     loadEvents()
     {
         addEventListener("keydown", this.keyDownEvent, false);
