@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<!--
+Lode Runner!!! HTML
+
+01234567890123456789012345678901234567890123456789012345678901234567890123456789
+-->
+<head>
+  <meta charset="UTF-8" />
+  <title>Linguagens e Ambientes de Programação (2019/2020) [Eng.Inf. - DI/FCT/UNL] - 3º projeto prático (Javascript)</title>
+  <script type="text/javascript" src="LodeRunner0.js"></script>
+  <script type="text/javascript" src="LodeRunner.js"></script>
+
+  <style>
+  	#Menu {
+  		position: relative;
+  		display: flex;
+  		align-items: center;
+  		justify-content: center;
+  	}
+
+  	#canvas1 {
+		border: 1px solid #000000;
+  	}
+
+  	#startBtn, #optionsBtn, #creditsBtn {
+  		position: absolute;
+  		top: 40%;
+  		width: 10%;
+  		height: 10%;
+  		font-size: 20px;
+  	}
+
+  	#optionsBtn {
+  		top: 50%;
+  	}
+
+  </style>
+</head>
+<body onload="onLoad()">
+  <p><b>LodeRunner</b> -- Authors: João Palmeiro - 55622, Miguel França - 55622</p>
+  <form name="form1" id="form1">
+	<div id='Menu'>
+    	<canvas id="canvas1">Your browser doesn't support the HTML5 CANVAS tag. </canvas>
+    	<button type="button" id="startBtn">START</button>
+    	<button type="button" id="optionsBtn">OPTIONS</button>
+    	<button type="button" id="creditsBtn">CREDITS</button>
+    </div>
+  </form>
+</body>
+</html>
