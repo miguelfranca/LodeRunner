@@ -46,6 +46,13 @@ class Actor
         this.y += dy;
         this.show();
     }
+
+    isBoundary(){
+        return false;
+    }
+    isClimbable (){
+        return false;
+    }
 }
 
 class PassiveActor extends Actor
@@ -61,6 +68,7 @@ class PassiveActor extends Actor
         control.gameState.world[this.x][this.y] = empty;
         empty.draw(this.x, this.y);
     }
+
 }
 
 class ActiveActor extends Actor
@@ -92,6 +100,7 @@ class Brick extends PassiveActor
     {
         super(x, y, "brick");
     }
+        isBoundary () { return true; }
 }
 
 class Chimney extends PassiveActor
@@ -141,6 +150,7 @@ class Ladder extends PassiveActor
         this.imageName = "ladder";
         this.show();
     }
+    isClimbable(){ return true; }
 }
 
 class Rope extends PassiveActor
@@ -157,6 +167,15 @@ class Stone extends PassiveActor
     {
         super(x, y, "stone");
     }
+    isBoundary () { return true; }
+}
+
+class BoundaryStone extends Stone {
+    constructor (){
+        super (-1, -1);
+    }
+    show () {}
+    hide () {}
 }
 
 class Hero extends ActiveActor
@@ -165,7 +184,25 @@ class Hero extends ActiveActor
     {
         super(x, y, "hero_runs_left");
     }
+    move (dx, dy){
+        let next = control.gameState.get(this.x+dx, this.y+dy);
+        let current = control.gameState.get (this.x, this.y);
+        if ((dy < 0 && !current.isClimbable()))
+            return;
+        if (!next.isBoundary () ){
+            this.hide();
+            this.x += dx;
+            this.y += dy;
+            this.show();
+        }
+    }
 
+    isFalling (){
+        let behind = control.getBehind(this.x, this.y);
+        let atFeet = control.get(this.x, this.y+1);
+        //depois e preciso verificar se esta nos sitios em que se pode cair
+        return false;
+    }
     animation()
     {
         let k = control.gameState.getKey();
@@ -178,10 +215,7 @@ class Hero extends ActiveActor
             if (k != null)
             {
                 let[dx, dy] = k;
-                this.hide();
-                this.x += dx;
-                this.y += dy;
-                this.show();
+                this.move (dx, dy);
             }
     }
 }
@@ -364,6 +398,21 @@ class GameState extends State
         super(statesMachine);
     }
 
+    isInside (x, y){
+        return (x >= 0 && x < WORLD_WIDTH && y >= 0 && y < WORLD_HEIGHT)
+    }
+
+    get (x, y){
+        if ( !this.isInside (x, y) ){
+            return this.boundaryStone;
+        }
+        else if (control.gameState.worldActive[x][y] !== empty){
+            return control.gameState.worldActive[x][y];
+        }
+        else 
+            return control.gameState.world[x][y];
+    }
+
     loadEvents()
     {
         addEventListener("keydown", this.keyDownEvent, false);
@@ -380,6 +429,7 @@ class GameState extends State
 
     onCreate()
     {
+        this.boundaryStone = new BoundaryStone ();
         this.key = 0;
 
         this.time = 0;
@@ -441,10 +491,10 @@ class GameState extends State
         case 65:
         case 75:
             return [0, 1]; //  DOWN, A, K
-        case 0:
-            return null;
+        case 32:
+            return " ";
         default:
-            return String.fromCharCode(k);
+            return null;
             // http://www.cambiaresearch.com/articles/15/javascript-char-codes-key-codes
         };
     }
