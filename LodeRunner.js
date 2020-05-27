@@ -21,6 +21,22 @@ const SCORE_PER_GOLD = 100;
 
 let empty, hero, control;
 
+class Animation
+{
+    constructor(images)
+    {
+        this.images = images;
+        this.currentImage = 0;
+    }
+
+    step(){
+        if(this.currentImage >= this.images.length)
+            this.currentImage = 0;
+
+        return this.images[this.currentImage++];
+    }
+}
+
 // ACTORS
 
 class Actor
@@ -47,14 +63,16 @@ class Actor
         this.show();
     }
 
-    isBoundary(){
+    isBoundary()
+    {
         return false;
     }
-    isClimbable (){
+    isClimbable()
+    {
         return false;
     }
     /*canBePassedThrough(){
-        return true;
+    return true;
     } */
 }
 
@@ -72,10 +90,12 @@ class PassiveActor extends Actor
         empty.draw(this.x, this.y);
     }
 
-    isGrabable (){
+    isGrabable()
+    {
         return false;
     }
-    isItem (){
+    isItem()
+    {
         return false;
     }
 }
@@ -87,6 +107,11 @@ class ActiveActor extends Actor
         super(x, y, imageName);
         this.time = 0; // timestamp used in the control of the animations
         this.runningLeft;
+
+        this.climbingAnimation = null;
+        this.runningAnimation = null;
+        this.rapelAnimation = null;
+        this.fallingAnimation = null;
     }
 
     show()
@@ -101,10 +126,12 @@ class ActiveActor extends Actor
         control.gameState.world[this.x][this.y].draw(this.x, this.y);
     }
 
-    grabItem (){
+    grabItem()
+    {
         let aux = control.gameState.world[this.x][this.y];
-        if (aux.isItem()){
-            aux.hide ();
+        if (aux.isItem())
+        {
+            aux.hide();
             this.show();
             return true;
         }
@@ -120,7 +147,10 @@ class Brick extends PassiveActor
     {
         super(x, y, "brick");
     }
-        isBoundary () { return true; }
+    isBoundary()
+    {
+        return true;
+    }
 }
 
 class Chimney extends PassiveActor
@@ -148,7 +178,10 @@ class Gold extends PassiveActor
     {
         super(x, y, "gold");
     }
-    isItem (){ return true; }
+    isItem()
+    {
+        return true;
+    }
 }
 
 class Invalid extends PassiveActor
@@ -171,7 +204,10 @@ class Ladder extends PassiveActor
         this.imageName = "ladder";
         this.show();
     }
-    isClimbable(){ return true; }
+    isClimbable()
+    {
+        return true;
+    }
 }
 
 class Rope extends PassiveActor
@@ -180,7 +216,10 @@ class Rope extends PassiveActor
     {
         super(x, y, "rope");
     }
-    isGrabable (){ return true; }
+    isGrabable()
+    {
+        return true;
+    }
 }
 
 class Stone extends PassiveActor
@@ -189,15 +228,20 @@ class Stone extends PassiveActor
     {
         super(x, y, "stone");
     }
-    isBoundary () { return true; }
+    isBoundary()
+    {
+        return true;
+    }
 }
 
-class BoundaryStone extends Stone {
-    constructor (){
-        super (-1, -1);
+class BoundaryStone extends Stone
+{
+    constructor()
+    {
+        super(-1, -1);
     }
-    show () {}
-    hide () {}
+    show() {}
+    hide() {}
 }
 
 class Hero extends ActiveActor
@@ -206,27 +250,36 @@ class Hero extends ActiveActor
     {
         super(x, y, "hero_runs_left");
         this.score = 0;
+
+        this.climbingAnimation = new Animation("hero_on_ladder_left", "hero_on_ladder_right");
+        this.runningAnimation = new Animation("hero_runs_left", "hero_runs_right");
+        this.rapelAnimation = new Animeation("hero_on_rope_left", "hero_on_rope_right");
+        this.fallingAnimation = new Animation("hero_falls_left", "hero_falls_right");
     }
-    move (dx, dy){
-        let next = control.gameState.get(this.x+dx, this.y+dy);
-        let current = control.gameState.getBehind (this.x, this.y);
+    move(dx, dy)
+    {
+        let next = control.gameState.get(this.x + dx, this.y + dy);
+        let current = control.gameState.getBehind(this.x, this.y);
         if ((dy < 0 && !current.isClimbable()))
             return;
-        if (!next.isBoundary () ){
-            this.updateMove (dx, dy);
+        if (!next.isBoundary())
+        {
+            this.updateMove(dx, dy);
             this.grabItem();
-            console.log (this.score);
+            console.log(this.score);
         }
     }
-    updateMove (dx,dy){
+    updateMove(dx, dy)
+    {
         this.hide();
         this.x += dx;
         this.y += dy;
         this.show();
     }
-    isFalling (){
+    isFalling()
+    {
         let behind = control.gameState.getBehind(this.x, this.y);
-        let atFeet = control.gameState.get(this.x, this.y+1);
+        let atFeet = control.gameState.get(this.x, this.y + 1);
         if (behind.isGrabable())
             return false;
         if (!atFeet.isBoundary() && !atFeet.isClimbable() && !behind.isClimbable())
@@ -234,7 +287,8 @@ class Hero extends ActiveActor
 
         return false;
     }
-    grabItem (){
+    grabItem()
+    {
         if (super.grabItem())
             this.score += SCORE_PER_GOLD;
 
@@ -242,9 +296,10 @@ class Hero extends ActiveActor
     animation()
     {
         let k = control.gameState.getKey();
-        if (this.isFalling()){
-            if (control.gameState.time%3 == 0)  //serve para atrasar o movimento de queda
-                this.updateMove (0,1);
+        if (this.isFalling())
+        {
+            if (control.gameState.time % 3 == 0) //serve para atrasar o movimento de queda
+                this.updateMove(0, 1);
             return;
         }
         if (k == ' ')
@@ -256,7 +311,7 @@ class Hero extends ActiveActor
             if (k != null)
             {
                 let[dx, dy] = k;
-                this.move (dx, dy);
+                this.move(dx, dy);
             }
     }
 }
@@ -268,6 +323,11 @@ class Robot extends ActiveActor
         super(x, y, "robot_runs_right");
         this.dx = 1;
         this.dy = 0;
+
+        this.climbingAnimation = new Animation("robot_on_ladder_left", "robot_on_ladder_right");
+        this.runningAnimation = new Animation("robot_runs_left", "robot_runs_right");
+        this.rapelAnimation = new Animeation("robot_on_rope_left", "robot_on_rope_right");
+        this.fallingAnimation = new Animation("robot_falls_left", "robot_falls_right");
     }
 }
 
@@ -439,31 +499,36 @@ class GameState extends State
         super(statesMachine);
     }
 
-    isInside (x, y){
+    isInside(x, y)
+    {
         return (x >= 0 && x < WORLD_WIDTH && y >= 0 && y < WORLD_HEIGHT)
     }
 
-    get (x, y){
+    get(x, y)
+    {
         /*if ( !this.isInside (x, y) ){
-            return this.boundaryStone;
+        return this.boundaryStone;
         }*/
-        let aux = this.getBehind (x, y);
-        if (aux !== this.boundaryStone && control.gameState.worldActive[x][y] !== empty){
+        let aux = this.getBehind(x, y);
+        if (aux !== this.boundaryStone && control.gameState.worldActive[x][y] !== empty)
+        {
             return control.gameState.worldActive[x][y];
         }
-        else 
+        else
             return aux;
 
-/*
+        /*
         else if (control.gameState.worldActive[x][y] !== empty){
-            return control.gameState.worldActive[x][y];
+        return control.gameState.worldActive[x][y];
         }
-        else 
-            return control.gameState.world[x][y];
-        */
+        else
+        return control.gameState.world[x][y];
+         */
     }
-    getBehind (x, y){
-        if ( !this.isInside (x, y) ){
+    getBehind(x, y)
+    {
+        if (!this.isInside(x, y))
+        {
             return this.boundaryStone;
         }
         return control.gameState.world[x][y];
@@ -484,8 +549,8 @@ class GameState extends State
 
     onCreate()
     {
-        this.boundaryStone = new BoundaryStone ();
-        this.score = 0;     //guardar valor das bolsas
+        this.boundaryStone = new BoundaryStone();
+        this.score = 0; //guardar valor das bolsas
 
         this.key = 0;
 
