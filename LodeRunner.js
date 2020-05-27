@@ -16,7 +16,7 @@ implementação que possam ser menos óbvios para o avaliador.
  */
 
 // GLOBAL VARIABLES
-
+const SCORE_PER_GOLD = 100;
 // tente não definir mais nenhuma variável global
 
 let empty, hero, control;
@@ -75,6 +75,9 @@ class PassiveActor extends Actor
     isGrabable (){
         return false;
     }
+    isItem (){
+        return false;
+    }
 }
 
 class ActiveActor extends Actor
@@ -83,6 +86,7 @@ class ActiveActor extends Actor
     {
         super(x, y, imageName);
         this.time = 0; // timestamp used in the control of the animations
+        this.runningLeft;
     }
 
     show()
@@ -95,6 +99,16 @@ class ActiveActor extends Actor
     {
         control.gameState.worldActive[this.x][this.y] = empty;
         control.gameState.world[this.x][this.y].draw(this.x, this.y);
+    }
+
+    grabItem (){
+        let aux = control.gameState.world[this.x][this.y];
+        if (aux.isItem()){
+            aux.hide ();
+            this.show();
+            return true;
+        }
+        return false;
     }
 
     animation() {}
@@ -134,6 +148,7 @@ class Gold extends PassiveActor
     {
         super(x, y, "gold");
     }
+    isItem (){ return true; }
 }
 
 class Invalid extends PassiveActor
@@ -190,6 +205,7 @@ class Hero extends ActiveActor
     constructor(x, y)
     {
         super(x, y, "hero_runs_left");
+        this.score = 0;
     }
     move (dx, dy){
         let next = control.gameState.get(this.x+dx, this.y+dy);
@@ -198,6 +214,8 @@ class Hero extends ActiveActor
             return;
         if (!next.isBoundary () ){
             this.updateMove (dx, dy);
+            this.grabItem();
+            console.log (this.score);
         }
     }
     updateMove (dx,dy){
@@ -216,7 +234,11 @@ class Hero extends ActiveActor
 
         return false;
     }
+    grabItem (){
+        if (super.grabItem())
+            this.score += SCORE_PER_GOLD;
 
+    }
     animation()
     {
         let k = control.gameState.getKey();
@@ -463,6 +485,8 @@ class GameState extends State
     onCreate()
     {
         this.boundaryStone = new BoundaryStone ();
+        this.score = 0;     //guardar valor das bolsas
+
         this.key = 0;
 
         this.time = 0;
