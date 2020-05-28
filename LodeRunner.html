@@ -23,17 +23,26 @@ Lode Runner!!! HTML
 		border: 1px solid #000000;
   	}
 
-  	#startBtn, #optionsBtn, #creditsBtn {
+  	#startBtn, #optionsBtn, #creditsBtn, #nextLevelBtn, #prevLevelBtn, #reloadLevelBtn {
   		position: absolute;
   		top: 40%;
   		width: 10%;
   		height: 10%;
   		font-size: 20px;
+      display: none;
   	}
 
   	#optionsBtn {
   		top: 50%;
   	}
+
+    #prevLevelBtn {
+      top: 50%;
+    }
+
+    #reloadLevelBtn {
+      top: 60%;
+    }
 
   </style>
 </head>
@@ -41,10 +50,15 @@ Lode Runner!!! HTML
   <p><b>LodeRunner</b> -- Authors: João Palmeiro - 55926, Miguel França - 55622</p>
   <form name="form1" id="form1">
 	<div id='Menu'>
-    	<canvas id="canvas1">Your browser doesn't support the HTML5 CANVAS tag. </canvas>
-    	<button type="button" id="startBtn">START</button>
-    	<button type="button" id="optionsBtn">OPTIONS</button>
-    	<button type="button" id="creditsBtn">CREDITS</button>
+      <canvas id="canvas1">Your browser doesn't support the HTML5 CANVAS tag. </canvas>
+  	  <button type="button" id="startBtn">START</button>
+   	  <button type="button" id="optionsBtn">OPTIONS</button>
+  	  <button type="button" id="creditsBtn">CREDITS</button>
+    	<p>
+    		<button type="button" id="nextLevelBtn">NEXT LEVEL</button>
+        <button type="button" id="prevLevelBtn">PREVIOUS LEVEL</button>
+        <button type="button" id="reloadLevelBtn">RELOAD LEVEL</button>
+      </p>
     </div>
   </form>
 </body>

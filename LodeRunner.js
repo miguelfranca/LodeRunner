@@ -17,9 +17,64 @@ implementação que possam ser menos óbvios para o avaliador.
 
 // GLOBAL VARIABLES
 const SCORE_PER_GOLD = 100;
+
+const directions =
+{
+    LEFT: "left",
+    RIGHT: "right",
+    UP: "up",
+    DOWN: "down"
+}
+
 // tente não definir mais nenhuma variável global
 
 let empty, hero, control;
+
+function onLoad()
+{
+    // Asynchronously load the images an then run the game
+    GameImages.loadAll(function ()
+    {
+        new GameControl();
+    }
+    );
+    onCanvasLoad();
+}
+
+function onCanvasLoad()
+{
+    let canvas = document.getElementById("canvas1");
+    let ctx = canvas.getContext("2d");
+
+    canvas.width = 504;
+    canvas.height = 272;
+
+    canvas.style.width = (screen.width / 2.0) + "px";
+    canvas.style.height = (screen.height / 2.0) + "px";
+}
+
+class GameControl
+{
+    constructor()
+    {
+        control = this;
+
+        this.canvas = document.getElementById("canvas1");
+        this.ctx = this.canvas.getContext("2d");
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+        this.statesMachine = new StatesMachine();
+        this.mainMenuState = new MainMenuState();
+        this.gameState = new GameState();
+        this.statesMachine.addState("Game", this.gameState);
+        this.statesMachine.changeState("MainMenu", this.mainMenuState);
+    }
+
+    clearCanvas()
+    {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+}
 
 class Animation
 {
@@ -29,11 +84,45 @@ class Animation
         this.currentImage = 0;
     }
 
-    step(){
-        if(this.currentImage >= this.images.length)
+    step()
+    {
+        if (this.currentImage > this.images.length - 1)
             this.currentImage = 0;
 
         return this.images[this.currentImage++];
+    }
+}
+
+class ActorEvent
+{
+    constructor(prev, cur, func, obj)
+    {
+        this.previousBlockFunc = prev;
+        this.currentBlockFunc = cur;
+
+        this.previousBlock = null;
+        this.currentBlock = null;
+
+        this.func = func;
+        this.obj = obj;
+    }
+
+    check(x, y)
+    {
+        this.previousBlock = this.currentBlock;
+        this.currentBlock = control.gameState.getBehind(x, y);
+
+        if (this.previousBlock == null || this.currentBlock == null)
+            return false;
+
+        if (this.currentBlockFunc(this.currentBlock) &&
+            this.previousBlockFunc(this.previousBlock))
+        {
+            this.func(this.obj);
+            return true;
+        }
+        else
+            return false;
     }
 }
 
@@ -55,14 +144,6 @@ class Actor
             x * ACTOR_PIXELS_X, y * ACTOR_PIXELS_Y);
     }
 
-    move(dx, dy)
-    {
-        this.hide();
-        this.x += dx;
-        this.y += dy;
-        this.show();
-    }
-
     isBoundary()
     {
         return false;
@@ -71,9 +152,6 @@ class Actor
     {
         return false;
     }
-    /*canBePassedThrough(){
-    return true;
-    } */
 }
 
 class PassiveActor extends Actor
@@ -94,7 +172,18 @@ class PassiveActor extends Actor
     {
         return false;
     }
+
     isItem()
+    {
+        return false;
+    }
+
+    isVisible()
+    {
+        return true;
+    }
+
+    isFellable()
     {
         return false;
     }
@@ -106,12 +195,60 @@ class ActiveActor extends Actor
     {
         super(x, y, imageName);
         this.time = 0; // timestamp used in the control of the animations
-        this.runningLeft;
 
         this.climbingAnimation = null;
-        this.runningAnimation = null;
-        this.rapelAnimation = null;
-        this.fallingAnimation = null;
+        this.moveDirection = directions.LEFT;
+
+        this.transitions = [
+            this.climbTrans = new ActorEvent(function (x)
+                {
+                    return true;
+                },
+                    function (x)
+                {
+                    return x.isClimbable() && x.isVisible();
+                },
+                    this.climb,
+                    this),
+
+            this.leaveClimb = new ActorEvent(function (x)
+                {
+                    return x.isClimbable();
+                },
+                    function (x)
+                {
+                    return x === empty;
+                },
+                    this.lclimb,
+                    this),
+
+            this.grabTrans = new ActorEvent(function (x)
+                {
+                    return true;
+                },
+                    function (x)
+                {
+                    return x.isGrabable();
+                },
+                    this.grab,
+                    this),
+
+            /*this.fallsTrans = new ActorEvent(function (x) { return (x.isGrabable() || x.isClimbable() || x === empty) && x.isVisible(); },
+            function (x) { return x === empty; },
+            this.fall,
+            this),*/
+
+            this.runningTrans = new ActorEvent(function (x)
+                {
+                    return x === empty || x.isGrabable();
+                },
+                    function (x)
+                {
+                    return x === empty || !x.isVisible();
+                },
+                    this.run,
+                    this)
+        ]
     }
 
     show()
@@ -124,6 +261,40 @@ class ActiveActor extends Actor
     {
         control.gameState.worldActive[this.x][this.y] = empty;
         control.gameState.world[this.x][this.y].draw(this.x, this.y);
+    }
+
+    update(dx, dy)
+    {
+        this.hide();
+        this.updatePos(dx, dy);
+        this.show();
+    }
+
+    updatePos(dx, dy)
+    {
+        this.x += dx;
+        this.y += dy;
+    }
+
+    move(dx, dy)
+    {
+        if (dx > 0)
+            this.moveDirection = directions.RIGHT;
+        else if (dx < 0)
+            this.moveDirection = directions.LEFT;
+        // else if(dy > 0)
+        //     this.moveDirection = directions.DOWN;
+        // else if(dy < 0)
+        //     this.moveDirection = directions.UP;
+
+        this.checkTransitions(dx, dy);
+    }
+
+    checkTransitions(dx, dy)
+    {
+        for (let i = 0; i < this.transitions.length; ++i)
+            if (this.transitions[i].check(this.x + dx, this.y + dy))
+                break;
     }
 
     grabItem()
@@ -139,6 +310,146 @@ class ActiveActor extends Actor
     }
 
     animation() {}
+}
+
+class Hero extends ActiveActor
+{
+    constructor(x, y)
+    {
+        super(x, y, "hero_runs_left");
+        this.score = 0;
+
+        this.climbingAnimation = new Animation(["hero_on_ladder_left", "hero_on_ladder_right"]);
+    }
+
+    climb(obj)
+    {
+        obj.imageName = obj.climbingAnimation.step();
+    }
+
+    lclimb(obj)
+    {
+        if (obj.moveDirection === directions.LEFT)
+            obj.imageName = "hero_runs_left";
+        else
+            obj.imageName = "hero_runs_right";
+    }
+
+    grab(obj)
+    {
+        if (obj.moveDirection === directions.LEFT)
+            obj.imageName = "hero_on_rope_left";
+        else
+            obj.imageName = "hero_on_rope_right";
+
+    }
+
+    fall()
+    {
+        if (this.moveDirection === directions.LEFT)
+            this.imageName = "hero_falls_left";
+        else
+            this.imageName = "hero_falls_right";
+    }
+
+    run(obj)
+    {
+        // if (obj.isFalling())
+        //     return;
+
+        if (obj.moveDirection === directions.LEFT)
+            obj.imageName = "hero_runs_left";
+        else if (obj.moveDirection === directions.RIGHT)
+            obj.imageName = "hero_runs_right";
+    }
+
+    move(dx, dy)
+    {
+        super.move(dx, dy);
+
+        let next = control.gameState.get(this.x + dx, this.y + dy);
+        let current = control.gameState.getBehind(this.x, this.y);
+
+        if ((dy < 0 && !current.isClimbable()))
+            return;
+
+        if (!next.isBoundary() && (current.isVisible() || dy >= 0))
+        {
+            this.hide();
+            this.updatePos(dx, dy);
+            this.grabItem();
+
+            if (this.isFalling())
+                this.fall();
+
+            this.show();
+        }
+    }
+
+    isFalling()
+    {
+        let behind = control.gameState.getBehind(this.x, this.y);
+        let atFeet = control.gameState.get(this.x, this.y + 1);
+
+        if (behind.isGrabable())
+            return false;
+
+        if (atFeet.isFellable() && !atFeet.isClimbable() && !behind.isClimbable())
+            return true;
+
+        return false;
+    }
+
+    grabItem()
+    {
+        if (super.grabItem())
+            this.score += SCORE_PER_GOLD;
+
+    }
+    animation()
+    {
+        super.animation();
+        let k = control.gameState.getKey();
+
+        if (this.isFalling())
+        {
+            
+            let atFeet = control.gameState.get(this.x, this.y + 1);
+            
+            if (control.gameState.time % 3 == 0) //serve para atrasar o movimento de queda
+                this.update(0, 1);
+
+            if (atFeet.isBoundary())
+                this.run(this);
+
+            return;
+        }
+
+        if (k == ' ')
+        {
+            alert('SHOOT');
+            return;
+        }
+        else
+            if (k != null)
+            {
+                let[dx, dy] = k;
+
+                this.move(dx, dy);
+            }
+    }
+}
+
+class Robot extends ActiveActor
+{
+    constructor(x, y)
+    {
+        super(x, y, "robot_runs_right");
+        this.dx = 1;
+        this.dy = 0;
+
+        this.climbingAnimation = new Animation(["robot_on_ladder_left", "robot_on_ladder_right"]);
+    }
 }
 
 class Brick extends PassiveActor
@@ -159,6 +470,11 @@ class Chimney extends PassiveActor
     {
         super(x, y, "chimney");
     }
+
+    isFellable()
+    {
+        return true;
+    }
 }
 
 class Empty extends PassiveActor
@@ -170,6 +486,11 @@ class Empty extends PassiveActor
 
     show() {}
     hide() {}
+
+    isFellable()
+    {
+        return true;
+    }
 }
 
 class Gold extends PassiveActor
@@ -197,13 +518,21 @@ class Ladder extends PassiveActor
     constructor(x, y)
     {
         super(x, y, "empty");
+        this.visiblility = false;
     }
 
     makeVisible()
     {
+        this.visiblility = true;
         this.imageName = "ladder";
         this.show();
     }
+
+    isVisible()
+    {
+        return this.visiblility;
+    }
+
     isClimbable()
     {
         return true;
@@ -242,138 +571,6 @@ class BoundaryStone extends Stone
     }
     show() {}
     hide() {}
-}
-
-class Hero extends ActiveActor
-{
-    constructor(x, y)
-    {
-        super(x, y, "hero_runs_left");
-        this.score = 0;
-
-        this.climbingAnimation = new Animation("hero_on_ladder_left", "hero_on_ladder_right");
-        this.runningAnimation = new Animation("hero_runs_left", "hero_runs_right");
-        this.rapelAnimation = new Animeation("hero_on_rope_left", "hero_on_rope_right");
-        this.fallingAnimation = new Animation("hero_falls_left", "hero_falls_right");
-    }
-    move(dx, dy)
-    {
-        let next = control.gameState.get(this.x + dx, this.y + dy);
-        let current = control.gameState.getBehind(this.x, this.y);
-        if ((dy < 0 && !current.isClimbable()))
-            return;
-        if (!next.isBoundary())
-        {
-            this.updateMove(dx, dy);
-            this.grabItem();
-            console.log(this.score);
-        }
-    }
-    updateMove(dx, dy)
-    {
-        this.hide();
-        this.x += dx;
-        this.y += dy;
-        this.show();
-    }
-    isFalling()
-    {
-        let behind = control.gameState.getBehind(this.x, this.y);
-        let atFeet = control.gameState.get(this.x, this.y + 1);
-        if (behind.isGrabable())
-            return false;
-        if (!atFeet.isBoundary() && !atFeet.isClimbable() && !behind.isClimbable())
-            return true;
-
-        return false;
-    }
-    grabItem()
-    {
-        if (super.grabItem())
-            this.score += SCORE_PER_GOLD;
-
-    }
-    animation()
-    {
-        let k = control.gameState.getKey();
-        if (this.isFalling())
-        {
-            if (control.gameState.time % 3 == 0) //serve para atrasar o movimento de queda
-                this.updateMove(0, 1);
-            return;
-        }
-        if (k == ' ')
-        {
-            alert('SHOOT');
-            return;
-        }
-        else
-            if (k != null)
-            {
-                let[dx, dy] = k;
-                this.move(dx, dy);
-            }
-    }
-}
-
-class Robot extends ActiveActor
-{
-    constructor(x, y)
-    {
-        super(x, y, "robot_runs_right");
-        this.dx = 1;
-        this.dy = 0;
-
-        this.climbingAnimation = new Animation("robot_on_ladder_left", "robot_on_ladder_right");
-        this.runningAnimation = new Animation("robot_runs_left", "robot_runs_right");
-        this.rapelAnimation = new Animeation("robot_on_rope_left", "robot_on_rope_right");
-        this.fallingAnimation = new Animation("robot_falls_left", "robot_falls_right");
-    }
-}
-
-// GAME CONTROL
-
-class GameControl
-{
-    constructor()
-    {
-        control = this;
-
-        this.canvas = document.getElementById("canvas1");
-        this.ctx = this.canvas.getContext("2d");
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-        this.statesMachine = new StatesMachine();
-        this.mainMenuState = new MainMenuState();
-        this.gameState = new GameState();
-        this.statesMachine.addState("Game", this.gameState);
-        this.statesMachine.changeState("MainMenu", this.mainMenuState);
-    }
-}
-
-// HTML FORM
-
-function onLoad()
-{
-    // Asynchronously load the images an then run the game
-    GameImages.loadAll(function ()
-    {
-        new GameControl();
-    }
-    );
-    onCanvasLoad();
-}
-
-function onCanvasLoad()
-{
-    let canvas = document.getElementById("canvas1");
-    let ctx = canvas.getContext("2d");
-
-    canvas.width = 504;
-    canvas.height = 272;
-
-    canvas.style.width = (screen.width / 2.0) + "px";
-    canvas.style.height = (screen.height / 2.0) + "px";
 }
 
 class StatesMachine
@@ -445,58 +642,12 @@ class State
     onDestroy() {}
 }
 
-class MainMenuState extends State
-{
-    constructor()
-    {
-        super();
-    }
-
-    onCreate()
-    {
-        this.showMainMenu();
-    }
-
-    onSwitch(oldState)
-    {
-        this.onCreate();
-    }
-
-    loadEvents()
-    {
-        document.getElementById("startBtn").addEventListener("click", this.initializeGame, false);
-        document.getElementById("optionsBtn").addEventListener("click", this.showOptions, false);
-        document.getElementById("creditsBtn").addEventListener("click", this.showMainMenu, false);
-    }
-
-    initializeGame()
-    {
-        document.getElementById("startBtn").style.display = 'none';
-        document.getElementById("optionsBtn").style.display = 'none';
-        control.statesMachine.changeState("Game");
-    }
-
-    showOptions()
-    {
-        document.getElementById("startBtn").style.display = 'none';
-        document.getElementById("optionsBtn").style.display = 'none';
-        document.getElementById("creditsBtn").style.display = 'block';
-    }
-
-    showMainMenu()
-    {
-        document.getElementById("startBtn").style.display = 'block';
-        document.getElementById("optionsBtn").style.display = 'block';
-        document.getElementById("creditsBtn").style.display = 'none';
-    }
-}
-
 class GameState extends State
 {
 
-    constructor(statesMachine)
+    constructor()
     {
-        super(statesMachine);
+        super();
     }
 
     isInside(x, y)
@@ -506,9 +657,6 @@ class GameState extends State
 
     get(x, y)
     {
-        /*if ( !this.isInside (x, y) ){
-        return this.boundaryStone;
-        }*/
         let aux = this.getBehind(x, y);
         if (aux !== this.boundaryStone && control.gameState.worldActive[x][y] !== empty)
         {
@@ -516,15 +664,8 @@ class GameState extends State
         }
         else
             return aux;
-
-        /*
-        else if (control.gameState.worldActive[x][y] !== empty){
-        return control.gameState.worldActive[x][y];
-        }
-        else
-        return control.gameState.world[x][y];
-         */
     }
+
     getBehind(x, y)
     {
         if (!this.isInside(x, y))
@@ -533,11 +674,46 @@ class GameState extends State
         }
         return control.gameState.world[x][y];
     }
+
+    loadNextLevel()
+    {
+        if (control.gameState.currentLevel < MAPS.length)
+        {
+            control.clearCanvas();
+            control.gameState.currentLevel++;
+            control.gameState.loadLevel(control.gameState.currentLevel);
+        }
+    }
+
+    loadPreviousLevel()
+    {
+        if (control.gameState.currentLevel > 1)
+        {
+            control.clearCanvas();
+            control.gameState.currentLevel--;
+            control.gameState.loadLevel(control.gameState.currentLevel);
+        }
+    }
+
+    reloadLevel()
+    {
+        control.clearCanvas();
+        control.gameState.loadLevel(control.gameState.currentLevel);
+    }
+
     loadEvents()
     {
         addEventListener("keydown", this.keyDownEvent, false);
         addEventListener("keyup", this.keyUpEvent, false);
+
         this.interval = setInterval(this.animationEvent, 1000 / ANIMATION_EVENTS_PER_SECOND);
+
+        document.getElementById("nextLevelBtn").addEventListener("click", this.loadNextLevel, false);
+        document.getElementById("prevLevelBtn").addEventListener("click", this.loadPreviousLevel, false);
+        document.getElementById("reloadLevelBtn").addEventListener("click", this.reloadLevel, false);
+        document.getElementById("nextLevelBtn").style.display = "block";
+        document.getElementById("prevLevelBtn").style.display = "block";
+        document.getElementById("reloadLevelBtn").style.display = "block";
     }
 
     unloadEvents()
@@ -545,6 +721,13 @@ class GameState extends State
         removeEventListener("keydown", this.keyDownEvent, false);
         removeaddEventListener("keyup", this.keyUpEvent, false);
         clearInterval(this.interval);
+
+        document.getElementById("nextLevelBtn").removeEventListener("click", this.loadNextLevel, false);
+        document.getElementById("nextLevelBtn").removeEventListener("click", this.loadPreviousLevel, false);
+        document.getElementById("reloadLevelBtn").removeEventListener("click", this.reloadLevel, false);
+        document.getElementById("nextLevelBtn").style.display = "none";
+        document.getElementById("prevLevelBtn").style.display = "none";
+        document.getElementById("reloadLevelBtn").style.display = "none";
     }
 
     onCreate()
@@ -561,8 +744,8 @@ class GameState extends State
         this.world = this.createMatrix();
         this.worldActive = this.createMatrix();
 
-        this.loadLevel(1);
-        this.loadEvents();
+        this.currentLevel = 1;
+        this.reloadLevel();
     }
 
     createMatrix()
@@ -580,6 +763,9 @@ class GameState extends State
 
     loadLevel(level)
     {
+        this.world = this.createMatrix();
+        this.worldActive = this.createMatrix();
+
         if (level < 1 || level > MAPS.length)
             fatalError("Invalid level " + level)
             let map = MAPS[level - 1]; // -1 because levels start at 1
@@ -642,4 +828,50 @@ class GameState extends State
     }
 
     keyUpEvent(k) {}
+}
+
+class MainMenuState extends State
+{
+    constructor()
+    {
+        super();
+    }
+
+    onCreate()
+    {
+        this.showMainMenu();
+    }
+
+    onSwitch(oldState)
+    {
+        this.onCreate();
+    }
+
+    loadEvents()
+    {
+        document.getElementById("startBtn").addEventListener("click", this.initializeGame, false);
+        document.getElementById("optionsBtn").addEventListener("click", this.showOptions, false);
+        document.getElementById("creditsBtn").addEventListener("click", this.showMainMenu, false);
+    }
+
+    initializeGame()
+    {
+        document.getElementById("startBtn").style.display = 'none';
+        document.getElementById("optionsBtn").style.display = 'none';
+        control.statesMachine.changeState("Game");
+    }
+
+    showOptions()
+    {
+        document.getElementById("startBtn").style.display = 'none';
+        document.getElementById("optionsBtn").style.display = 'none';
+        document.getElementById("creditsBtn").style.display = 'block';
+    }
+
+    showMainMenu()
+    {
+        document.getElementById("startBtn").style.display = 'block';
+        document.getElementById("optionsBtn").style.display = 'block';
+        document.getElementById("creditsBtn").style.display = 'none';
+    }
 }
