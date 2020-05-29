@@ -147,7 +147,8 @@ class Actor
     isBoundary()
     {
         return false;
-    }
+    }   //o metodo esta aqui para garantir a possibilidade de que, no futuro,
+        //possam haver atores diferentes que imponham restricoes de passagem ao heroi
     isClimbable()
     {
         return false;
@@ -168,11 +169,15 @@ class PassiveActor extends Actor
         empty.draw(this.x, this.y);
     }
 
-    isGrabable()
+    isBreakable()
     {
         return false;
     }
 
+    isGrabable()
+    {
+        return false;
+    }
     isItem()
     {
         return false;
@@ -278,17 +283,31 @@ class ActiveActor extends Actor
 
     move(dx, dy)
     {
-        if (dx > 0)
-            this.moveDirection = directions.RIGHT;
-        else if (dx < 0)
-            this.moveDirection = directions.LEFT;
+        /*let aux =
+            (this.moveDirection === directions.RIGHT && dx < 0 || this.moveDirection === directions.LEFT && dx > 0 );
+*/
+     
         // else if(dy > 0)
         //     this.moveDirection = directions.DOWN;
         // else if(dy < 0)
         //     this.moveDirection = directions.UP;
+      /*  if (aux){
+            this.run(this);
+            this.updateImg();
+            return;
+        }*/
+
+        if (dx > 0)
+            this.moveDirection = directions.RIGHT;
+        else if (dx < 0)
+            this.moveDirection = directions.LEFT;
 
         this.checkTransitions(dx, dy);
 
+        this.tryToMove(dx, dy);
+    }
+
+    tryToMove (dx, dy){
         let next = control.gameState.get(this.x + dx, this.y + dy);
         let current = control.gameState.getBehind(this.x, this.y);
 
@@ -348,8 +367,6 @@ class ActiveActor extends Actor
                 this.update(0, 1);
 
             this.falling = true;
-
-            return;
         }
         if(this.falling && !this.isFalling()){ // stopped falling (is grounded)
             let behind = control.gameState.getBehind(this.x, this.y);
@@ -358,7 +375,7 @@ class ActiveActor extends Actor
                 this.run(this);
             else
                 this.grab(this);
-            
+            this.grabItem();
             this.updateImg();
 
             this.falling = false;
@@ -371,7 +388,7 @@ class Hero extends ActiveActor
     constructor(x, y)
     {
         super(x, y, "hero_runs_left");
-        this.score = 0;
+        this.numberOfItems = 0;
 
         this.climbingAnimation = new Animation(["hero_on_ladder_left", "hero_on_ladder_right"]);
     }
@@ -426,21 +443,44 @@ class Hero extends ActiveActor
     move(dx, dy){
         super.move(dx, dy);
 
-        if (this.y === 0 && this.score === control.gameState.valueOfGold){
+        if (this.y === 0 && this.numberOfItems === control.gameState.grabedItems){
             control.gameState.loadNextLevel();
+            //this.goldPerLevel = 0;
             return;
         }
     }
 
     grabItem()
     {
-        if (super.grabItem())
-            this.score += SCORE_PER_GOLD;
+        if (super.grabItem()){
+            this.numberOfItems ++;
+            control.gameState.score += SCORE_PER_GOLD;
+        }
 
-        if (this.score === control.gameState.valueOfGold) { //vai estar sempre aa fazer isto, supostamente so queriamos que fizesse uma vez
+        if (this.numberOfItems === control.gameState.grabedItems) { 
             control.gameState.makeLadderVisible();
         }
     }
+
+    shoot (){
+        let behind = control.gameState.getBehind(this.x, this.y);
+
+        if (this.isFalling() || behind.isGrabable())
+            return;
+
+        let target = null;
+
+        if (this.moveDirection === directions.RIGHT)
+            target = control.gameState.get (this.x+1 ,this.y+1);
+        else 
+            target = control.gameState.get (this.x-1 ,this.y+1);
+        
+        let aboveTarget = control.gameState.get(target.x, target.y-1);
+        if (target.isBreakable() && !aboveTarget.isBoundary()){
+            target.setBroken(true);
+        }
+    }
+
     animation()
     {
         super.animation();
@@ -449,7 +489,8 @@ class Hero extends ActiveActor
 
         if (k == ' ')
         {
-            alert('SHOOT');
+            this.shoot ();
+            //alert('SHOOT');
             return;
         }
         else
@@ -474,15 +515,43 @@ class Robot extends ActiveActor
     }
 }
 
-class Brick extends PassiveActor
+class Breakable extends PassiveActor{
+    constructor (x, y, img){
+        super (x, y, img);
+        this.image = img;
+        this.isBroken = false;
+    }
+    setBroken (boolVal){
+        this.isBroken = boolVal;
+        if (boolVal)
+            this.imageName = "empty";
+        else 
+            this.imageName = this.image;
+        this.show();
+    }
+
+    isFellable (){
+        return this.isBroken;
+    }
+
+    getBroken (){
+        return this.isBroken;
+    }
+    isBoundary (){
+        return !this.isBroken;
+    }
+    isBreakable(){
+        return true;
+    }
+
+}
+
+
+class Brick extends Breakable
 {
     constructor(x, y)
     {
         super(x, y, "brick");
-    }
-    isBoundary()
-    {
-        return true;
     }
 }
 
@@ -523,6 +592,9 @@ class Gold extends PassiveActor
     }
     isItem()
     {
+        return true;
+    }
+    isFellable (){
         return true;
     }
 }
@@ -698,7 +770,7 @@ class GameState extends State
         for (let i = 0; i < WORLD_WIDTH; i++){
             for (let j = 0; j < WORLD_HEIGHT; j++){
                 if (control.gameState.world[i][j].isItem())
-                    value += SCORE_PER_GOLD;
+                    value ++;
                 if (!control.gameState.world[i][j].isVisible())
                     this.storeCoordinates(i, j, control.gameState.invisibleLadder);
             }
@@ -733,7 +805,7 @@ class GameState extends State
             control.gameState.currentLevel++;
             control.gameState.loadLevel(control.gameState.currentLevel);
         }
-        control.gameState.valueOfGold = control.gameState.getValue(); //atualiza o total de ouro daquele nivel
+        control.gameState.grabedItems = control.gameState.getValue(); //atualiza o total de ouro daquele nivel
     }
 
     loadPreviousLevel()
@@ -786,6 +858,7 @@ class GameState extends State
         this.boundaryStone = new BoundaryStone();
 
         this.key = 0;
+        this.score = 0;
 
         this.time = 0;
 
@@ -798,7 +871,7 @@ class GameState extends State
         this.reloadLevel();
 
         this.invisibleLadder = [];
-        this.valueOfGold = this.getValue();
+        this.grabedItems = this.getValue();
     }
 
     createMatrix()
