@@ -100,8 +100,8 @@ class ActorEvent
         this.previousBlockFunc = prev;
         this.currentBlockFunc = cur;
 
-        this.previousBlock = null;
-        this.currentBlock = null;
+        this.previousBlock = empty;
+        this.currentBlock = empty;
 
         this.func = func;
         this.obj = obj;
@@ -148,20 +148,26 @@ class Actor
     isBoundary()
     {
         return false;
-    }   //o metodo esta aqui para garantir a possibilidade de que, no futuro,
-        //possam haver atores diferentes que imponham restricoes de passagem ao heroi
+    } //o metodo esta aqui para garantir a possibilidade de que, no futuro,
+    //possam haver atores diferentes que imponham restricoes de passagem ao heroi
     isClimbable()
     {
         return false;
     }
-    isEmpty ()
+    isEmpty()
     {
         return false;
     }
+
+    animation() {}
 }
 
 class PassiveActor extends Actor
 {
+    constructor(x, y, imageName)
+    {
+        super(x, y, imageName);
+    }
     show()
     {
         control.gameState.world[this.x][this.y] = this;
@@ -271,7 +277,8 @@ class ActiveActor extends Actor
         this.show();
     }
 
-    updateImg(){
+    updateImg()
+    {
         this.hide();
         this.show();
     }
@@ -285,17 +292,17 @@ class ActiveActor extends Actor
     move(dx, dy)
     {
         /*let aux =
-            (this.moveDirection === directions.RIGHT && dx < 0 || this.moveDirection === directions.LEFT && dx > 0 );
-*/
-     
+        (this.moveDirection === directions.RIGHT && dx < 0 || this.moveDirection === directions.LEFT && dx > 0 );
+         */
+
         // else if(dy > 0)
         //     this.moveDirection = directions.DOWN;
         // else if(dy < 0)
         //     this.moveDirection = directions.UP;
-      /*  if (aux){
-            this.run(this);
-            this.updateImg();
-            return;
+        /*  if (aux){
+        this.run(this);
+        this.updateImg();
+        return;
         }*/
 
         if (dx > 0)
@@ -308,7 +315,8 @@ class ActiveActor extends Actor
         this.tryToMove(dx, dy);
     }
 
-    tryToMove (dx, dy){
+    tryToMove(dx, dy)
+    {
         let next = control.gameState.get(this.x + dx, this.y + dy);
         let current = control.gameState.getBehind(this.x, this.y);
 
@@ -318,7 +326,7 @@ class ActiveActor extends Actor
         if (!next.isBoundary() && (current.isVisible() || dy >= 0))
         {
             this.hide();
-            if(!this.isFalling())
+            if (!this.isFalling())
                 this.updatePos(dx, dy);
 
             this.grabItem();
@@ -332,7 +340,8 @@ class ActiveActor extends Actor
 
     checkTransitions(dx, dy)
     {
-        for (let i = 0; i < this.transitions.length; ++i){
+        for (let i = 0; i < this.transitions.length; ++i)
+        {
             if (this.transitions[i].check(this.x + dx, this.y + dy))
                 break;
         }
@@ -354,14 +363,15 @@ class ActiveActor extends Actor
     {
         let behind = control.gameState.getBehind(this.x, this.y);
         let atFeet = control.gameState.getBehind(this.x, this.y + 1);
-            
+
         if (!behind.isGrabable() && atFeet.isFellable() && !atFeet.isClimbable() && !behind.isClimbable())
             return true;
 
         return false;
     }
 
-    animation() {
+    animation()
+    {
         if (this.isFalling())
         {
             if (this.time % 3 == 0) //serve para atrasar o movimento de queda
@@ -369,9 +379,10 @@ class ActiveActor extends Actor
 
             this.falling = true;
         }
-        if(this.falling && !this.isFalling()){ // stopped falling (is grounded)
+        if (this.falling && !this.isFalling())
+        { // stopped falling (is grounded)
             let behind = control.gameState.getBehind(this.x, this.y);
-            
+
             if (!behind.isGrabable())
                 this.run(this);
             else
@@ -418,14 +429,14 @@ class Hero extends ActiveActor
 
     lgrab(obj)
     {
-        if(obj.isFalling())
+        if (obj.isFalling())
             obj.fall();
         else
             obj.run(obj);
     }
 
     fall()
-    {        
+    {
         if (this.moveDirection === directions.LEFT)
             this.imageName = "hero_falls_left";
         else
@@ -440,19 +451,20 @@ class Hero extends ActiveActor
             obj.imageName = "hero_runs_right";
     }
 
-   /* shooting (){
+    shooting()
+    {
         if (this.moveDirection === directions.LEFT)
             this.imageName = "hero_shoots_left";
         else if (this.moveDirection === directions.RIGHT)
             this.imageName = "hero_shoots_right";
-
     }
-    */
 
-    move(dx, dy){
+    move(dx, dy)
+    {
         super.move(dx, dy);
 
-        if (this.y === 0 && this.numberOfItems === control.gameState.grabedItems){
+        if (this.y === 0 && this.numberOfItems === control.gameState.grabedItems)
+        {
             control.gameState.loadNextLevel();
             //this.goldPerLevel = 0;
             return;
@@ -461,17 +473,20 @@ class Hero extends ActiveActor
 
     grabItem()
     {
-        if (super.grabItem()){
-            this.numberOfItems ++;
+        if (super.grabItem())
+        {
+            this.numberOfItems++;
             control.gameState.score += SCORE_PER_GOLD;
         }
 
-        if (this.numberOfItems === control.gameState.grabedItems) { 
+        if (this.numberOfItems === control.gameState.grabedItems)
+        {
             control.gameState.makeLadderVisible();
         }
     }
 
-    shoot (){
+    shoot()
+    {
         let behind = control.gameState.getBehind(this.x, this.y);
 
         if (this.isFalling() || behind.isGrabable())
@@ -480,24 +495,24 @@ class Hero extends ActiveActor
         let target = null;
 
         if (this.moveDirection === directions.RIGHT)
-            target = control.gameState.get (this.x+1 ,this.y+1);
-        else 
-            target = control.gameState.get (this.x-1 ,this.y+1);
-        
-        let aboveTarget = control.gameState.get(target.x, target.y-1);
-        if (target.isBreakable() && !aboveTarget.isBoundary() && !target.isBroken()){
+            target = control.gameState.get(this.x + 1, this.y + 1);
+        else
+            target = control.gameState.get(this.x - 1, this.y + 1);
+
+        let aboveTarget = control.gameState.get(target.x, target.y - 1);
+        if (target.isBreakable() && !aboveTarget.isBoundary() && !target.isBroken())
+        {
             target.setBroken(true);
-            this.tryToMove(this.x-target.x, 0);
-            // this.shooting();
-            // this.updateImg();
+            this.tryToMove(this.x - target.x, 0);
+            this.shooting();
+            this.updateImg();
+            setTimeout(function ()
+            {
+                hero.run(hero);
+                hero.updateImg();
+            }, 100);
         }
     }
-    /*shooting (obj){
-        if (obj.moveDirection === directions.LEFT)
-            obj.imageName = "hero_shoots_left";
-        else if (obj.moveDirection === directions.RIGHT)
-            obj.imageName = "hero_shoots_right";
-    }*/
 
     animation()
     {
@@ -507,7 +522,7 @@ class Hero extends ActiveActor
 
         if (k == ' ')
         {
-            this.shoot ();
+            this.shoot();
             //alert('SHOOT');
             return;
         }
@@ -533,40 +548,47 @@ class Robot extends ActiveActor
     }
 }
 
-class Breakable extends PassiveActor{
-    constructor (x, y, img){
-        super (x, y, img);
+class Breakable extends PassiveActor
+{
+    constructor(x, y, img)
+    {
+        super(x, y, img);
         this.image = img;
         this.broken = false;
     }
-    setBroken (boolVal){
+    setBroken(boolVal)
+    {
         this.broken = boolVal;
         if (boolVal)
             this.imageName = "empty";
-        else 
+        else
             this.imageName = this.image;
         this.show();
     }
 
-    isFellable (){
+    isFellable()
+    {
         return this.broken;
     }
 
-    isBroken (){
+    isBroken()
+    {
         return this.broken;
     }
-    isBoundary (){
+    isBoundary()
+    {
         return !this.broken;
     }
-    isBreakable(){
+    isBreakable()
+    {
         return true;
     }
-    isEmpty(){
+    isEmpty()
+    {
         return this.broken;
     }
 
 }
-
 
 class Brick extends Breakable
 {
@@ -603,7 +625,8 @@ class Empty extends PassiveActor
     {
         return true;
     }
-    isEmpty (){
+    isEmpty()
+    {
         return true;
     }
 }
@@ -618,7 +641,8 @@ class Gold extends PassiveActor
     {
         return true;
     }
-    isFellable (){
+    isFellable()
+    {
         return true;
     }
 }
@@ -668,7 +692,8 @@ class Rope extends PassiveActor
         return true;
     }
 
-    isFellable(){
+    isFellable()
+    {
         return true;
     }
 }
@@ -788,13 +813,16 @@ class GameState extends State
             return aux;
     }
 
-    getValue() {
+    getValue()
+    {
         control.gameState.invisibleLadder = [];
         let value = 0;
-        for (let i = 0; i < WORLD_WIDTH; i++){
-            for (let j = 0; j < WORLD_HEIGHT; j++){
+        for (let i = 0; i < WORLD_WIDTH; i++)
+        {
+            for (let j = 0; j < WORLD_HEIGHT; j++)
+            {
                 if (control.gameState.world[i][j].isItem())
-                    value ++;
+                    value++;
                 if (!control.gameState.world[i][j].isVisible())
                     this.storeCoordinates(i, j, control.gameState.invisibleLadder);
             }
@@ -802,13 +830,21 @@ class GameState extends State
         return value;
     }
 
-    storeCoordinates(xVal, yVal, array) {
-        array.push({x: xVal, y: yVal});
+    storeCoordinates(xVal, yVal, array)
+    {
+        array.push(
+        {
+            x: xVal,
+            y: yVal
+        }
+        );
     }
 
-    makeLadderVisible (){
+    makeLadderVisible()
+    {
         let array = control.gameState.invisibleLadder;
-        for (let i = 0; i < array.length; i++){
+        for (let i = 0; i < array.length; i++)
+        {
             control.gameState.world[array[i].x][array[i].y].makeVisible();
         }
     }
@@ -979,7 +1015,6 @@ class GameState extends State
 
     keyUpEvent(k) {}
 }
-
 
 class MainMenuState extends State
 {
