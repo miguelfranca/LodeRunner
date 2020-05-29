@@ -132,6 +132,7 @@ class Actor
 {
     constructor(x, y, imageName)
     {
+        this.time = 0; // timestamp used in the control of the animations
         this.x = x;
         this.y = y;
         this.imageName = imageName;
@@ -150,6 +151,10 @@ class Actor
     }   //o metodo esta aqui para garantir a possibilidade de que, no futuro,
         //possam haver atores diferentes que imponham restricoes de passagem ao heroi
     isClimbable()
+    {
+        return false;
+    }
+    isEmpty ()
     {
         return false;
     }
@@ -173,7 +178,6 @@ class PassiveActor extends Actor
     {
         return false;
     }
-
     isGrabable()
     {
         return false;
@@ -182,12 +186,10 @@ class PassiveActor extends Actor
     {
         return false;
     }
-
     isVisible()
     {
         return true;
     }
-
     isFellable()
     {
         return false;
@@ -199,7 +201,6 @@ class ActiveActor extends Actor
     constructor(x, y, imageName)
     {
         super(x, y, imageName);
-        this.time = 0; // timestamp used in the control of the animations
 
         this.climbingAnimation = null;
         this.moveDirection = directions.LEFT;
@@ -222,18 +223,18 @@ class ActiveActor extends Actor
                 },
                     function (x)
                 {
-                    return x === empty;
+                    return x.isEmpty();
                 },
                     this.lclimb,
                     this),
 
             this.runningTrans = new ActorEvent(function (x)
                 {
-                    return x === empty || x.isGrabable();
+                    return x.isEmpty() || x.isGrabable() || x.isItem();
                 },
                     function (x)
                 {
-                    return x === empty || !x.isVisible();
+                    return x.isEmpty() || !x.isVisible();
                 },
                     this.run,
                     this),
@@ -363,7 +364,7 @@ class ActiveActor extends Actor
     animation() {
         if (this.isFalling())
         {
-            if (control.gameState.time % 3 == 0) //serve para atrasar o movimento de queda
+            if (this.time % 3 == 0) //serve para atrasar o movimento de queda
                 this.update(0, 1);
 
             this.falling = true;
@@ -423,7 +424,6 @@ class Hero extends ActiveActor
             obj.run(obj);
     }
 
-
     fall()
     {        
         if (this.moveDirection === directions.LEFT)
@@ -439,6 +439,15 @@ class Hero extends ActiveActor
         else if (obj.moveDirection === directions.RIGHT)
             obj.imageName = "hero_runs_right";
     }
+
+   /* shooting (){
+        if (this.moveDirection === directions.LEFT)
+            this.imageName = "hero_shoots_left";
+        else if (this.moveDirection === directions.RIGHT)
+            this.imageName = "hero_shoots_right";
+
+    }
+    */
 
     move(dx, dy){
         super.move(dx, dy);
@@ -476,10 +485,19 @@ class Hero extends ActiveActor
             target = control.gameState.get (this.x-1 ,this.y+1);
         
         let aboveTarget = control.gameState.get(target.x, target.y-1);
-        if (target.isBreakable() && !aboveTarget.isBoundary()){
+        if (target.isBreakable() && !aboveTarget.isBoundary() && !target.isBroken()){
             target.setBroken(true);
+            this.tryToMove(this.x-target.x, 0);
+            // this.shooting();
+            // this.updateImg();
         }
     }
+    /*shooting (obj){
+        if (obj.moveDirection === directions.LEFT)
+            obj.imageName = "hero_shoots_left";
+        else if (obj.moveDirection === directions.RIGHT)
+            obj.imageName = "hero_shoots_right";
+    }*/
 
     animation()
     {
@@ -519,10 +537,10 @@ class Breakable extends PassiveActor{
     constructor (x, y, img){
         super (x, y, img);
         this.image = img;
-        this.isBroken = false;
+        this.broken = false;
     }
     setBroken (boolVal){
-        this.isBroken = boolVal;
+        this.broken = boolVal;
         if (boolVal)
             this.imageName = "empty";
         else 
@@ -531,17 +549,20 @@ class Breakable extends PassiveActor{
     }
 
     isFellable (){
-        return this.isBroken;
+        return this.broken;
     }
 
-    getBroken (){
-        return this.isBroken;
+    isBroken (){
+        return this.broken;
     }
     isBoundary (){
-        return !this.isBroken;
+        return !this.broken;
     }
     isBreakable(){
         return true;
+    }
+    isEmpty(){
+        return this.broken;
     }
 
 }
@@ -580,6 +601,9 @@ class Empty extends PassiveActor
 
     isFellable()
     {
+        return true;
+    }
+    isEmpty (){
         return true;
     }
 }
