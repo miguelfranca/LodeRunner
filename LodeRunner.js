@@ -17,6 +17,7 @@ implementação que possam ser menos óbvios para o avaliador.
 
 // GLOBAL VARIABLES
 const SCORE_PER_GOLD = 100;
+const RESPAWN_TIME = 8*ANIMATION_EVENTS_PER_SECOND;
 
 const directions =
 {
@@ -270,6 +271,11 @@ class ActiveActor extends Actor
         control.gameState.world[this.x][this.y].draw(this.x, this.y);
     }
 
+    die ()
+    {
+        this.hide();
+    }
+
     update(dx, dy)
     {
         this.hide();
@@ -489,7 +495,7 @@ class Hero extends ActiveActor
     {
         let behind = control.gameState.getBehind(this.x, this.y);
 
-        if (this.isFalling() || behind.isGrabable())
+        if (this.isFalling() || behind.isGrabable() || behind.isClimbable())
             return;
 
         let target = null;
@@ -510,7 +516,7 @@ class Hero extends ActiveActor
             {
                 hero.run(hero);
                 hero.updateImg();
-            }, 100);
+            }, 500);
         }
     }
 
@@ -550,15 +556,18 @@ class Robot extends ActiveActor
 
 class Breakable extends PassiveActor
 {
-    constructor(x, y, img)
+    constructor(x, y, img, respawnTime)
     {
         super(x, y, img);
         this.image = img;
         this.broken = false;
+        this.timeOfBreak = -1;
+        this.respawnTime = respawnTime;
     }
     setBroken(boolVal)
     {
         this.broken = boolVal;
+        this.timeOfBreak = this.time;
         if (boolVal)
             this.imageName = "empty";
         else
@@ -570,7 +579,6 @@ class Breakable extends PassiveActor
     {
         return this.broken;
     }
-
     isBroken()
     {
         return this.broken;
@@ -587,6 +595,16 @@ class Breakable extends PassiveActor
     {
         return this.broken;
     }
+    animation ()
+    {
+        if (this.broken && (this.time - this.timeOfBreak > this.respawnTime)){
+            let inSamePos = control.gameState.get(this.x, this.y);
+            if (inSamePos instanceof ActiveActor)
+                inSamePos.die();
+            this.setBroken(false);
+            this.timeOfBreak = -1;
+        }
+    }
 
 }
 
@@ -594,7 +612,7 @@ class Brick extends Breakable
 {
     constructor(x, y)
     {
-        super(x, y, "brick");
+        super(x, y, "brick", RESPAWN_TIME);
     }
 }
 
@@ -1000,10 +1018,17 @@ class GameState extends State
             for (let y = 0; y < WORLD_HEIGHT; y++)
             {
                 let a = control.gameState.worldActive[x][y];
-                if (a.time < control.gameState.time)
+                let b = control.gameState.world[x][y];
+
+                if (a.time < control.gameState.time )
                 {
                     a.time = control.gameState.time;
                     a.animation();
+                }
+                if (b.time < control.gameState.time )
+                {
+                    b.time = control.gameState.time;
+                    b.animation();
                 }
             }
     }
