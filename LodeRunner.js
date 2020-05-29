@@ -115,8 +115,8 @@ class ActorEvent
         if (this.previousBlock == null || this.currentBlock == null)
             return false;
 
-        if (this.currentBlockFunc(this.currentBlock) &&
-            this.previousBlockFunc(this.previousBlock))
+        if (this.previousBlockFunc(this.previousBlock) &&
+            this.currentBlockFunc(this.currentBlock))
         {
             this.func(this.obj);
             return true;
@@ -222,17 +222,6 @@ class ActiveActor extends Actor
                     this.lclimb,
                     this),
 
-            this.grabTrans = new ActorEvent(function (x)
-                {
-                    return true;
-                },
-                    function (x)
-                {
-                    return x.isGrabable();
-                },
-                    this.grab,
-                    this),
-
             this.runningTrans = new ActorEvent(function (x)
                 {
                     return x === empty || x.isGrabable();
@@ -242,6 +231,17 @@ class ActiveActor extends Actor
                     return x === empty || !x.isVisible();
                 },
                     this.run,
+                    this),
+
+            this.grabTrans = new ActorEvent(function (x)
+                {
+                    return true;
+                },
+                    function (x)
+                {
+                    return x.isGrabable();
+                },
+                    this.grab,
                     this)
         ]
     }
@@ -298,7 +298,8 @@ class ActiveActor extends Actor
         if (!next.isBoundary() && (current.isVisible() || dy >= 0))
         {
             this.hide();
-            this.updatePos(dx, dy);
+            if(!this.isFalling())
+                this.updatePos(dx, dy);
 
             this.grabItem();
 
@@ -311,9 +312,10 @@ class ActiveActor extends Actor
 
     checkTransitions(dx, dy)
     {
-        for (let i = 0; i < this.transitions.length; ++i)
+        for (let i = 0; i < this.transitions.length; ++i){
             if (this.transitions[i].check(this.x + dx, this.y + dy))
                 break;
+        }
     }
 
     grabItem()
@@ -395,6 +397,15 @@ class Hero extends ActiveActor
             obj.imageName = "hero_on_rope_right";
 
     }
+
+    lgrab(obj)
+    {
+        if(obj.isFalling())
+            obj.fall();
+        else
+            obj.run(obj);
+    }
+
 
     fall()
     {        
@@ -701,12 +712,10 @@ class GameState extends State
 
     makeLadderVisible (){
         let array = control.gameState.invisibleLadder;
-        console.log(array);
         for (let i = 0; i < array.length; i++){
             control.gameState.world[array[i].x][array[i].y].makeVisible();
         }
     }
-
 
     getBehind(x, y)
     {
