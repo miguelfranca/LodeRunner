@@ -297,18 +297,23 @@ class ActiveActor extends Actor
 
     move(dx, dy)
     {
-        /*let aux =
+        let aux =
         (this.moveDirection === directions.RIGHT && dx < 0 || this.moveDirection === directions.LEFT && dx > 0 );
-         */
+        //fica true caso ele queira mudar de direcao
 
         // else if(dy > 0)
         //     this.moveDirection = directions.DOWN;
         // else if(dy < 0)
         //     this.moveDirection = directions.UP;
-        /*  if (aux){
-        this.run(this);
-        this.updateImg();
-        return;
+        /*if (aux){
+            if (dx > 0)
+                this.moveDirection = directions.RIGHT;
+            else
+                this.moveDirection = directions.LEFT;
+
+            this.run(this);
+            this.updateImg();
+            return;
         }*/
 
         if (dx > 0)
@@ -318,7 +323,15 @@ class ActiveActor extends Actor
 
         this.checkTransitions(dx, dy);
 
-        this.tryToMove(dx, dy);
+        if (aux){
+            let current = control.gameState.getBehind(this.x, this.y);
+            if (current.isEmpty())
+                this.run(this);
+            if (!(current.isGrabable() || current.isClimbable()))
+                this.updateImg();
+        }
+        else
+            this.tryToMove(dx, dy);
     }
 
     tryToMove(dx, dy)
@@ -540,6 +553,10 @@ class Hero extends ActiveActor
                 this.move(dx, dy);
             }
     }
+
+    getPos (){
+        return [this.x, this.y];
+    }
 }
 
 class Robot extends ActiveActor
@@ -551,6 +568,84 @@ class Robot extends ActiveActor
         this.dy = 0;
 
         this.climbingAnimation = new Animation(["robot_on_ladder_left", "robot_on_ladder_right"]);
+    }
+
+    climb(obj)
+    {
+        obj.imageName = obj.climbingAnimation.step();
+    }
+
+    lclimb(obj)
+    {
+        if (obj.moveDirection === directions.LEFT)
+            obj.imageName = "robot_runs_left";
+        else
+            obj.imageName = "robot_runs_right";
+    }
+
+    grab(obj)
+    {
+        if (obj.moveDirection === directions.LEFT)
+            obj.imageName = "robot_on_rope_left";
+        else
+            obj.imageName = "robot_on_rope_right";
+
+    }
+
+    lgrab(obj)
+    {
+        if (obj.isFalling())
+            obj.fall();
+        else
+            obj.run(obj);
+    }
+
+    fall()
+    {
+        if (this.moveDirection === directions.LEFT)
+            this.imageName = "robot_falls_left";
+        else
+            this.imageName = "robot_falls_right";
+    }
+
+    run(obj)
+    {
+        if (obj.moveDirection === directions.LEFT)
+            obj.imageName = "robot_runs_left";
+        else if (obj.moveDirection === directions.RIGHT)
+            obj.imageName = "robot_runs_right";
+    }
+
+
+    animation ()
+    {
+        super.animation();
+
+        //let heroPos = hero.;    //tem vetor com coordenadas do heroi
+        this.decideMovement (hero.x, hero.y);
+        
+    }
+
+    decideMovement (x, y){
+        if (!(this.time % 5 == 0))
+            return;
+
+        let current = control.gameState.getBehind(this.x, this.y);
+        let atFeet = control.gameState.getBehind(this.x, this.y+1);
+        if ((current.isClimbable() || atFeet.isClimbable()) && (!atFeet.isBoundary() || this.y > y)){
+            if (this.y > y)
+                this.move (0, -1);
+            else if (this.y < y)
+                this.move (0, 1);
+            return;
+        }
+        //else if ()
+
+        if (this.x > x){
+            this.move(-1, 0);
+        }
+        else if (this.x < x)
+            this.move (1, 0);
     }
 }
 
