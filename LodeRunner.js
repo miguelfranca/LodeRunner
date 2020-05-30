@@ -17,7 +17,10 @@ implementação que possam ser menos óbvios para o avaliador.
 
 // GLOBAL VARIABLES
 const SCORE_PER_GOLD = 100;
-const RESPAWN_TIME = 8*ANIMATION_EVENTS_PER_SECOND;
+const RESPAWN_TIME_BRICK = 8 * ANIMATION_EVENTS_PER_SECOND;
+const RESPAWN_TIME_ROBOT = 1 * ANIMATION_EVENTS_PER_SECOND;
+const HERO_SHOOT_ANIM = 500;
+const ROBOT_DUMB_ANIM = 1000;
 
 const directions =
 {
@@ -161,6 +164,11 @@ class Actor
     }
 
     animation() {}
+
+    isFellable()
+    {
+        return false;
+    }
 }
 
 class PassiveActor extends Actor
@@ -196,10 +204,6 @@ class PassiveActor extends Actor
     isVisible()
     {
         return true;
-    }
-    isFellable()
-    {
-        return false;
     }
 }
 
@@ -271,7 +275,7 @@ class ActiveActor extends Actor
         control.gameState.world[this.x][this.y].draw(this.x, this.y);
     }
 
-    die ()
+    die()
     {
         this.hide();
     }
@@ -298,7 +302,7 @@ class ActiveActor extends Actor
     move(dx, dy)
     {
         let aux =
-        (this.moveDirection === directions.RIGHT && dx < 0 || this.moveDirection === directions.LEFT && dx > 0 );
+            (this.moveDirection === directions.RIGHT && dx < 0 || this.moveDirection === directions.LEFT && dx > 0);
         //fica true caso ele queira mudar de direcao
 
         // else if(dy > 0)
@@ -306,14 +310,14 @@ class ActiveActor extends Actor
         // else if(dy < 0)
         //     this.moveDirection = directions.UP;
         /*if (aux){
-            if (dx > 0)
-                this.moveDirection = directions.RIGHT;
-            else
-                this.moveDirection = directions.LEFT;
+        if (dx > 0)
+        this.moveDirection = directions.RIGHT;
+        else
+        this.moveDirection = directions.LEFT;
 
-            this.run(this);
-            this.updateImg();
-            return;
+        this.run(this);
+        this.updateImg();
+        return;
         }*/
 
         if (dx > 0)
@@ -323,11 +327,17 @@ class ActiveActor extends Actor
 
         this.checkTransitions(dx, dy);
 
-        if (aux){
+        if (aux)
+        {
             let current = control.gameState.getBehind(this.x, this.y);
+
             if (current.isEmpty())
                 this.run(this);
-            if (!(current.isGrabable() || current.isClimbable()))
+
+            if (current.isGrabable())
+                this.grab(this);
+
+            if (!current.isClimbable())
                 this.updateImg();
         }
         else
@@ -381,12 +391,9 @@ class ActiveActor extends Actor
     isFalling()
     {
         let behind = control.gameState.getBehind(this.x, this.y);
-        let atFeet = control.gameState.getBehind(this.x, this.y + 1);
+        let atFeet = control.gameState.get(this.x, this.y + 1);
 
-        if (!behind.isGrabable() && atFeet.isFellable() && !atFeet.isClimbable() && !behind.isClimbable())
-            return true;
-
-        return false;
+        return !behind.isGrabable() && atFeet.isFellable() && !atFeet.isClimbable() && !behind.isClimbable();
     }
 
     animation()
@@ -406,6 +413,7 @@ class ActiveActor extends Actor
                 this.run(this);
             else
                 this.grab(this);
+
             this.grabItem();
             this.updateImg();
 
@@ -483,11 +491,7 @@ class Hero extends ActiveActor
         super.move(dx, dy);
 
         if (this.y === 0 && this.numberOfItems === control.gameState.grabedItems)
-        {
             control.gameState.loadNextLevel();
-            //this.goldPerLevel = 0;
-            return;
-        }
     }
 
     grabItem()
@@ -529,7 +533,7 @@ class Hero extends ActiveActor
             {
                 hero.run(hero);
                 hero.updateImg();
-            }, 500);
+            }, HERO_SHOOT_ANIM);
         }
     }
 
@@ -554,10 +558,20 @@ class Hero extends ActiveActor
             }
     }
 
-    getPos (){
-        return [this.x, this.y];
-    }
+    // getPos (){
+    //     return [this.x, this.y];
+    // }
 }
+
+// class Respawnable extends PassiveActor
+// {
+//     constructor(x, y, image)
+//     {
+//         super(x, y, image);
+//         this.timeOfBreak = -1;
+//         this.respawnTime = respawnTime;
+//     }
+// }
 
 class Robot extends ActiveActor
 {
@@ -566,6 +580,12 @@ class Robot extends ActiveActor
         super(x, y, "robot_runs_right");
         this.dx = 1;
         this.dy = 0;
+
+        this.timeOfStun = -1;
+        this.respawnTime = RESPAWN_TIME_ROBOT;
+        this.dumbTime = false;
+
+        this.stunned = false;
 
         this.climbingAnimation = new Animation(["robot_on_ladder_left", "robot_on_ladder_right"]);
     }
@@ -616,36 +636,79 @@ class Robot extends ActiveActor
             obj.imageName = "robot_runs_right";
     }
 
-
-    animation ()
+    animation()
     {
-        super.animation();
 
-        //let heroPos = hero.;    //tem vetor com coordenadas do heroi
-        this.decideMovement (hero.x, hero.y);
-        
+        if (!this.stunned)
+        {
+            let current = control.gameState.getBehind(this.x, this.y);
+
+            if (current.isBreakable() && current.isBroken())
+            {
+                this.timeOfStun = this.time;
+                this.stun();
+                return;
+            }
+            super.animation();
+        }
+
+        if (!this.dumbTime && this.stunned && (this.time - this.timeOfStun > this.respawnTime))
+        {
+            setTimeout((function (robot)
+                {
+                    return function ()
+                    {
+                        robot.stunned = false;
+                        robot.timeOfStun = -1;
+                        robot.dumbTime = false;
+                    }
+                }
+                )(this), ROBOT_DUMB_ANIM);
+
+            this.dumbTime = true;
+
+            this.stunned = false;
+            this.timeOfStun = -1;
+
+            let mov = (hero.x - this.x);
+            this.update(mov < -1 ? -1 : 1, -1); // avoid falling in same hole again
+
+        }
+
+        this.decideMovement(hero.x, hero.y);
     }
 
-    decideMovement (x, y){
-        if (!(this.time % 5 == 0))
+    decideMovement(x, y)
+    {
+        if (this.stunned || this.dumbTime || this.time % 5 != 0)
             return;
 
-        let current = control.gameState.getBehind(this.x, this.y);
-        let atFeet = control.gameState.getBehind(this.x, this.y+1);
-        if ((current.isClimbable() || atFeet.isClimbable()) && (!atFeet.isBoundary() || this.y > y)){
-            if (this.y > y)
-                this.move (0, -1);
-            else if (this.y < y)
-                this.move (0, 1);
-            return;
-        }
-        //else if ()
+        let oldCoords = [this.x, this.y];
 
-        if (this.x > x){
-            this.move(-1, 0);
+        if (this.y > y)
+            this.move(0, -1);
+        else if (this.y < y)
+            this.move(0, 1);
+
+        let newCoords = [this.x, this.y];
+
+        if (oldCoords != newCoords)
+        {
+            if (this.x > x)
+                this.move(-1, 0);
+            else if (this.x < x)
+                this.move(1, 0);
         }
-        else if (this.x < x)
-            this.move (1, 0);
+    }
+
+    stun()
+    {
+        this.stunned = true;
+    }
+
+    isFellable()
+    {
+        return !this.stunned;
     }
 }
 
@@ -690,9 +753,10 @@ class Breakable extends PassiveActor
     {
         return this.broken;
     }
-    animation ()
+    animation()
     {
-        if (this.broken && (this.time - this.timeOfBreak > this.respawnTime)){
+        if (this.broken && (this.time - this.timeOfBreak > this.respawnTime))
+        {
             let inSamePos = control.gameState.get(this.x, this.y);
             if (inSamePos instanceof ActiveActor)
                 inSamePos.die();
@@ -707,7 +771,7 @@ class Brick extends Breakable
 {
     constructor(x, y)
     {
-        super(x, y, "brick", RESPAWN_TIME);
+        super(x, y, "brick", RESPAWN_TIME_BRICK);
     }
 }
 
@@ -1115,12 +1179,12 @@ class GameState extends State
                 let a = control.gameState.worldActive[x][y];
                 let b = control.gameState.world[x][y];
 
-                if (a.time < control.gameState.time )
+                if (a.time < control.gameState.time)
                 {
                     a.time = control.gameState.time;
                     a.animation();
                 }
-                if (b.time < control.gameState.time )
+                if (b.time < control.gameState.time)
                 {
                     b.time = control.gameState.time;
                     b.animation();
