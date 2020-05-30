@@ -18,7 +18,7 @@ implementação que possam ser menos óbvios para o avaliador.
 // GLOBAL VARIABLES
 const SCORE_PER_GOLD = 100;
 const RESPAWN_TIME_BRICK = 8 * ANIMATION_EVENTS_PER_SECOND;
-const RESPAWN_TIME_ROBOT = 1 * ANIMATION_EVENTS_PER_SECOND;
+const RESPAWN_TIME_ROBOT = 3 * ANIMATION_EVENTS_PER_SECOND;
 const HERO_SHOOT_ANIM = 500;
 const ROBOT_DUMB_ANIM = 1000;
 
@@ -149,7 +149,7 @@ class Actor
             x * ACTOR_PIXELS_X, y * ACTOR_PIXELS_Y);
     }
 
-    isBoundary()
+    isSolid()
     {
         return false;
     } //o metodo esta aqui para garantir a possibilidade de que, no futuro,
@@ -163,12 +163,16 @@ class Actor
         return false;
     }
 
-    animation() {}
-
     isFellable()
     {
         return false;
     }
+
+    isDeadly(){
+        return false;
+    }
+
+    animation() {}
 }
 
 class PassiveActor extends Actor
@@ -205,6 +209,11 @@ class PassiveActor extends Actor
     {
         return true;
     }
+
+    isBoundary()
+    {
+        return false;
+    }
 }
 
 class ActiveActor extends Actor
@@ -215,6 +224,7 @@ class ActiveActor extends Actor
 
         this.climbingAnimation = null;
         this.moveDirection = directions.LEFT;
+        this.items = [];
 
         this.transitions = [
             this.climbTrans = new ActorEvent(function (x)
@@ -245,7 +255,7 @@ class ActiveActor extends Actor
                 },
                     function (x)
                 {
-                    return x.isEmpty() || !x.isVisible();
+                    return x.isEmpty();
                 },
                     this.run,
                     this),
@@ -278,6 +288,7 @@ class ActiveActor extends Actor
     die()
     {
         this.hide();
+        console.log("died");
     }
 
     update(dx, dy)
@@ -304,21 +315,6 @@ class ActiveActor extends Actor
         let aux =
             (this.moveDirection === directions.RIGHT && dx < 0 || this.moveDirection === directions.LEFT && dx > 0);
         //fica true caso ele queira mudar de direcao
-
-        // else if(dy > 0)
-        //     this.moveDirection = directions.DOWN;
-        // else if(dy < 0)
-        //     this.moveDirection = directions.UP;
-        /*if (aux){
-        if (dx > 0)
-        this.moveDirection = directions.RIGHT;
-        else
-        this.moveDirection = directions.LEFT;
-
-        this.run(this);
-        this.updateImg();
-        return;
-        }*/
 
         if (dx > 0)
             this.moveDirection = directions.RIGHT;
@@ -352,7 +348,7 @@ class ActiveActor extends Actor
         if ((dy < 0 && !current.isClimbable()))
             return;
 
-        if (!next.isBoundary() && (current.isVisible() || dy >= 0))
+        if (!next.isSolid() && (current.isVisible() || dy >= 0))
         {
             this.hide();
             if (!this.isFalling())
@@ -376,17 +372,7 @@ class ActiveActor extends Actor
         }
     }
 
-    grabItem()
-    {
-        let aux = control.gameState.world[this.x][this.y];
-        if (aux.isItem())
-        {
-            aux.hide();
-            this.show();
-            return true;
-        }
-        return false;
-    }
+    grabItem() {}
 
     isFalling()
     {
@@ -427,7 +413,6 @@ class Hero extends ActiveActor
     constructor(x, y)
     {
         super(x, y, "hero_runs_left");
-        this.numberOfItems = 0;
 
         this.climbingAnimation = new Animation(["hero_on_ladder_left", "hero_on_ladder_right"]);
     }
@@ -486,23 +471,40 @@ class Hero extends ActiveActor
             this.imageName = "hero_shoots_right";
     }
 
+    hurt(){
+        this.die();
+    }
+
     move(dx, dy)
     {
+        let next = control.gameState.get(this.x + dx, this.y + dy);
+
+        if (next.isDeadly())
+        {
+            this.hurt();
+            return;
+        }
+
         super.move(dx, dy);
 
-        if (this.y === 0 && this.numberOfItems === control.gameState.grabedItems)
+        if (this.y === 0 && this.items.length === control.gameState.grabedItems)
             control.gameState.loadNextLevel();
     }
 
     grabItem()
     {
-        if (super.grabItem())
+        super.grabItem();
+
+        let aux = control.gameState.world[this.x][this.y];
+        if (aux.isItem())
         {
-            this.numberOfItems++;
+            this.items.push(aux);
+            aux.pickUp();
+
             control.gameState.score += SCORE_PER_GOLD;
         }
 
-        if (this.numberOfItems === control.gameState.grabedItems)
+        if (this.items.length === control.gameState.grabedItems)
         {
             control.gameState.makeLadderVisible();
         }
@@ -523,16 +525,20 @@ class Hero extends ActiveActor
             target = control.gameState.get(this.x - 1, this.y + 1);
 
         let aboveTarget = control.gameState.get(target.x, target.y - 1);
-        if (target.isBreakable() && !aboveTarget.isBoundary() && !target.isBroken())
+        let recoilPosition = control.gameState.get(this.x + (this.x - target.x), this.y + 1);
+
+        if (target.isBreakable() && !aboveTarget.isSolid() && !target.isBroken())
         {
             target.setBroken(true);
-            this.tryToMove(this.x - target.x, 0);
+
+            if (!recoilPosition.isFellable())
+                this.tryToMove(this.x - target.x, 0);
+
             this.shooting();
             this.updateImg();
             setTimeout(function ()
             {
-                hero.run(hero);
-                hero.updateImg();
+                hero.move(0, 0);
             }, HERO_SHOOT_ANIM);
         }
     }
@@ -557,10 +563,6 @@ class Hero extends ActiveActor
                 this.move(dx, dy);
             }
     }
-
-    // getPos (){
-    //     return [this.x, this.y];
-    // }
 }
 
 // class Respawnable extends PassiveActor
@@ -636,6 +638,29 @@ class Robot extends ActiveActor
             obj.imageName = "robot_runs_right";
     }
 
+    grabItem()
+    {
+        super.grabItem();
+        let aux = control.gameState.world[this.x][this.y];
+
+        if (this.items.length == 0 && aux.isItem())
+        {
+            this.items.push(aux);
+            aux.pickUp();
+        }
+    }
+
+    move(dx, dy)
+    {
+        let next = control.gameState.get(this.x + dx, this.y + dy);
+
+        if(next instanceof Hero)
+            next.hurt();
+
+        if (!(next instanceof Robot))
+            super.move(dx, dy);
+    }
+
     animation()
     {
 
@@ -647,9 +672,18 @@ class Robot extends ActiveActor
             {
                 this.timeOfStun = this.time;
                 this.stun();
+                if (this.items.length > 0)
+                {
+                    let item = this.items[0];
+                    item.drop(this.x, this.y - 1);
+                    this.items = {};
+                }
                 return;
             }
-            super.animation();
+
+            let possibleFall = control.gameState.get(this.x, this.y + 1);
+            if (!(possibleFall instanceof Robot))
+                super.animation();
         }
 
         if (!this.dumbTime && this.stunned && (this.time - this.timeOfStun > this.respawnTime))
@@ -671,7 +705,7 @@ class Robot extends ActiveActor
             this.timeOfStun = -1;
 
             let mov = (hero.x - this.x);
-            this.update(mov < -1 ? -1 : 1, -1); // avoid falling in same hole again
+            this.update(mov <= -1 ? -1 : 1, -1); // avoid falling in same hole again
 
         }
 
@@ -710,6 +744,11 @@ class Robot extends ActiveActor
     {
         return !this.stunned;
     }
+
+    isDeadly()
+    {
+        return true;
+    }
 }
 
 class Breakable extends PassiveActor
@@ -741,7 +780,7 @@ class Breakable extends PassiveActor
     {
         return this.broken;
     }
-    isBoundary()
+    isSolid()
     {
         return !this.broken;
     }
@@ -802,18 +841,38 @@ class Empty extends PassiveActor
     {
         return true;
     }
+
     isEmpty()
     {
         return true;
     }
 }
 
-class Gold extends PassiveActor
+class Item extends PassiveActor
 {
-    constructor(x, y)
+    constructor(x, y, img)
     {
-        super(x, y, "gold");
+        super(x, y, img);
+        this.wasBehind = null;
     }
+
+    pickUp()
+    {
+        this.hide();
+        if (this.wasBehind !== null)
+            this.wasBehind.show();
+
+        control.gameState.get(this.x, this.y).show();
+    }
+
+    drop(x, y)
+    {
+        this.wasBehind = control.gameState.getBehind(x, y);
+        this.x = x;
+        this.y = y;
+        this.show();
+    }
+
     isItem()
     {
         return true;
@@ -821,6 +880,14 @@ class Gold extends PassiveActor
     isFellable()
     {
         return true;
+    }
+}
+
+class Gold extends Item
+{
+    constructor(x, y)
+    {
+        super(x, y, "gold");
     }
 }
 
@@ -847,6 +914,11 @@ class Ladder extends PassiveActor
         this.show();
     }
 
+    isEmpty()
+    {
+        return !this.visiblility;
+    }
+
     isVisible()
     {
         return this.visiblility;
@@ -854,7 +926,7 @@ class Ladder extends PassiveActor
 
     isClimbable()
     {
-        return true;
+        return this.visiblility;
     }
 }
 
@@ -881,7 +953,8 @@ class Stone extends PassiveActor
     {
         super(x, y, "stone");
     }
-    isBoundary()
+
+    isSolid()
     {
         return true;
     }
@@ -895,6 +968,11 @@ class BoundaryStone extends Stone
     }
     show() {}
     hide() {}
+
+    isBoundary()
+    {
+        return true;
+    }
 }
 
 class StatesMachine
