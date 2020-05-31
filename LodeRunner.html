@@ -23,8 +23,8 @@ Lode Runner!!! HTML
 		border: 1px solid #000000;
   	}
 
-  	#startBtn, #optionsBtn, #creditsBtn, #nextLevelBtn,
-    #prevLevelBtn, #reloadLevelBtn, #restartBtn, #mainMenuBtn {
+  	#startBtn, #optionsBtn, #backBtn, #nextLevelBtn,
+    #prevLevelBtn, #reloadLevelBtn, #restartLvlBtn, #restartGameBtn, #mainMenuBtn, #sliderSize {
   		position: absolute;
   		top: 40%;
   		width: 10%;
@@ -37,8 +37,13 @@ Lode Runner!!! HTML
   		top: 50%;
   	}
 
-    #mainMenuBtn {
+
+    #restartGameBtn {
       top: 50%;
+    }
+
+    #mainMenuBtn {
+      top: 60%;
     }
 
     #prevLevelBtn {
@@ -49,23 +54,32 @@ Lode Runner!!! HTML
       top: 60%;
     }
 
+    #sliderSize {
+      top: 60%;
+    }
+
   </style>
+
 </head>
 <body onload="onLoad()">
   <p><b>LodeRunner</b> -- Authors: João Palmeiro - 55926, Miguel França - 55622</p>
   <form name="form1" id="form1">
 	<div id='Menu'>
       <canvas id="canvas1">Your browser doesn't support the HTML5 CANVAS tag. </canvas>
+      <input type="range"   id="sliderSize" min="1" max="100" value="50" class="slidecontainer">
   	  <button type="button" id="startBtn">START</button>
    	  <button type="button" id="optionsBtn">OPTIONS</button>
-      <button type="button" id="creditsBtn">CREDITS</button>
-      <button type="button" id="restartBtn">RESTART</button>
+      <button type="button" id="backBtn">BACK</button>
+      <button type="button" id="restartLvlBtn">RESTART LEVEL</button>
+      <button type="button" id="restartGameBtn">RESTART GAME</button>
   	  <button type="button" id="mainMenuBtn">MAIN MENU</button>
+
     	<p>
     		<button type="button" id="nextLevelBtn">NEXT LEVEL</button>
         <button type="button" id="prevLevelBtn">PREVIOUS LEVEL</button>
         <button type="button" id="reloadLevelBtn">RELOAD LEVEL</button>
       </p>
+
     </div>
   </form>
 </body>

@@ -56,13 +56,18 @@ function onLoad()
 function onCanvasLoad()
 {
     let canvas = document.getElementById("canvas1");
-    let ctx = canvas.getContext("2d");
 
     canvas.width = 504;
     canvas.height = 272;
 
-    canvas.style.width = (screen.width / 2.0) + "px";
-    canvas.style.height = (screen.height / 2.0) + "px";
+    scaleCanvas(50, 50);
+}
+
+function scaleCanvas(x, y){
+    let canvas = document.getElementById("canvas1");
+
+    canvas.style.width = (screen.width * x / 100) + "px";
+    canvas.style.height = (screen.height * y / 100) + "px";
 }
 
 class GameControl
@@ -164,7 +169,8 @@ class Actor
     {
         return false;
     } //o metodo esta aqui para garantir a possibilidade de que, no futuro,
-    //possam haver atores diferentes que imponham restricoes de passagem ao heroi
+    //possam haver atores diferentes que imponham restricoes
+    // de passagem ao heroi
     isClimbable()
     {
         return false;
@@ -493,7 +499,8 @@ class Hero extends ActiveActor
             this.imageName = "hero_shoots_right";
     }
 
-    die(){
+    die()
+    {
         super.die();
         control.statesMachine.changeState("GameOver");
     }
@@ -506,6 +513,7 @@ class Hero extends ActiveActor
     move(dx, dy)
     {
         let next = control.gameState.get(this.x + dx, this.y + dy);
+        let current = control.gameState.getBehind(this.x, this.y);
 
         if (next.isDeadly())
         {
@@ -515,7 +523,8 @@ class Hero extends ActiveActor
 
         super.move(dx, dy);
 
-        if (this.y === 0 && this.items.length === control.gameState.grabedItems)
+        if (this.y === 0 && this.items.length === control.gameState.grabedItems 
+            && current.isClimbable())
             control.gameState.loadNextLevel();
     }
 
@@ -696,7 +705,8 @@ class Robot extends ActiveActor
 
         let newCoords = [this.x, this.y];
 
-        if (oldCoords != newCoords && next.isKind()){
+        if (oldCoords != newCoords && next.isKind())
+        {
             next.hurt();
             this.show();
         }
@@ -717,7 +727,7 @@ class Robot extends ActiveActor
                 {
                     let item = this.items[0];
                     item.drop(this.x, this.y - 1);
-                    this.items = {};
+                    this.items = [];
                 }
                 return;
             }
@@ -747,7 +757,11 @@ class Robot extends ActiveActor
             this.timeOfStun = -1;
 
             let mov = (hero.x - this.x);
+
+            let prevBlock = control.gameState.getBehind(this.x, this.y);
+
             this.update(mov <= -1 ? -1 : 1, -1); // avoid falling in same hole again
+            prevBlock.reGrow();
             this.grabItem();
         }
 
@@ -797,18 +811,15 @@ class Robot extends ActiveActor
 
 class Breakable extends PassiveActor
 {
-    constructor(x, y, img, respawnTime)
+    constructor(x, y, img)
     {
         super(x, y, img);
         this.image = img;
         this.broken = false;
-        this.timeOfBreak = -1;
-        this.respawnTime = respawnTime;
     }
     setBroken(boolVal)
     {
         this.broken = boolVal;
-        this.timeOfBreak = this.time;
         if (boolVal)
             this.imageName = "empty";
         else
@@ -836,25 +847,36 @@ class Breakable extends PassiveActor
     {
         return this.broken;
     }
-    animation()
-    {
-        if (this.broken && (this.time - this.timeOfBreak > this.respawnTime))
-        {
-            let inSamePos = control.gameState.get(this.x, this.y);
-            if (inSamePos instanceof ActiveActor)
-                inSamePos.die();
-            this.setBroken(false);
-            this.timeOfBreak = -1;
-        }
-    }
-
 }
 
 class Brick extends Breakable
 {
     constructor(x, y)
     {
-        super(x, y, "brick", RESPAWN_TIME_BRICK);
+        super(x, y, "brick");
+        this.timeOfBreak = -1;
+        this.respawnTime = RESPAWN_TIME_BRICK;
+    }
+
+    setBroken(boolVal)
+    {
+        super.setBroken(boolVal);
+        this.timeOfBreak = this.time;
+    }
+
+    reGrow()
+    {
+        let inSamePos = control.gameState.get(this.x, this.y);
+        if (inSamePos instanceof ActiveActor)
+            inSamePos.die();
+        this.setBroken(false);
+        this.timeOfBreak = -1;
+    }
+
+    animation()
+    {
+        if (this.broken && (this.time - this.timeOfBreak > this.respawnTime))
+            this.reGrow();
     }
 }
 
@@ -1027,7 +1049,6 @@ class StatesMachine
         this.currentState = null;
         this.states = new Map();
         this.activeStates = new Map();
-        this.readyToSwitch = false;
     }
 
     addState(name, state)
@@ -1048,7 +1069,7 @@ class StatesMachine
         let oldState = this.currentState;
         this.currentState = name;
 
-        if (oldState != null)
+        if (oldState !== null)
             this.states.get(oldState).unload();
 
         if (this.activeStates.has(this.currentState))
@@ -1158,21 +1179,24 @@ class GameState extends State
 
     loadNextLevel()
     {
-        if (control.gameState.currentLevel < MAPS.length)
+        let gs = control.gameState;
+        if (gs.currentLevel < MAPS.length)
         {
             control.clearCanvas();
-            control.gameState.currentLevel++;
-            control.gameState.loadLevel(control.gameState.currentLevel);
+            gs.currentLevel++;
+            gs.loadLevel(control.gameState.currentLevel);
         }
     }
 
     loadPreviousLevel()
     {
-        if (control.gameState.currentLevel > 1)
+        let gs = control.gameState;
+
+        if (gs.currentLevel > 1)
         {
             control.clearCanvas();
-            control.gameState.currentLevel--;
-            control.gameState.loadLevel(control.gameState.currentLevel);
+            gs.currentLevel--;
+            gs.loadLevel(control.gameState.currentLevel);
         }
     }
 
@@ -1189,9 +1213,12 @@ class GameState extends State
 
         this.interval = setInterval(this.animationEvent, 1000 / ANIMATION_EVENTS_PER_SECOND);
 
-        document.getElementById("nextLevelBtn").addEventListener("click", this.loadNextLevel, false);
-        document.getElementById("prevLevelBtn").addEventListener("click", this.loadPreviousLevel, false);
-        document.getElementById("reloadLevelBtn").addEventListener("click", this.reloadLevel, false);
+        document.getElementById("nextLevelBtn").addEventListener("click", 
+            this.loadNextLevel, false);
+        document.getElementById("prevLevelBtn").addEventListener("click", 
+            this.loadPreviousLevel, false);
+        document.getElementById("reloadLevelBtn").addEventListener("click", 
+            this.reloadLevel, false);
         document.getElementById("nextLevelBtn").style.display = "block";
         document.getElementById("prevLevelBtn").style.display = "block";
         document.getElementById("reloadLevelBtn").style.display = "block";
@@ -1203,9 +1230,12 @@ class GameState extends State
         removeEventListener("keyup", this.keyUpEvent, false);
         clearInterval(this.interval);
 
-        document.getElementById("nextLevelBtn").removeEventListener("click", this.loadNextLevel, false);
-        document.getElementById("nextLevelBtn").removeEventListener("click", this.loadPreviousLevel, false);
-        document.getElementById("reloadLevelBtn").removeEventListener("click", this.reloadLevel, false);
+        document.getElementById("nextLevelBtn").removeEventListener("click", 
+            this.loadNextLevel, false);
+        document.getElementById("nextLevelBtn").removeEventListener("click", 
+            this.loadPreviousLevel, false);
+        document.getElementById("reloadLevelBtn").removeEventListener("click", 
+            this.reloadLevel, false);
         document.getElementById("nextLevelBtn").style.display = "none";
         document.getElementById("prevLevelBtn").style.display = "none";
         document.getElementById("reloadLevelBtn").style.display = "none";
@@ -1299,21 +1329,23 @@ class GameState extends State
 
     animationEvent()
     {
-        control.gameState.time++;
+        let gs = control.gameState;
+
+        gs.time++;
         for (let x = 0; x < WORLD_WIDTH; x++)
             for (let y = 0; y < WORLD_HEIGHT; y++)
             {
-                let a = control.gameState.worldActive[x][y];
-                let b = control.gameState.world[x][y];
+                let a = gs.worldActive[x][y];
+                let b = gs.world[x][y];
 
-                if (a.time < control.gameState.time)
+                if (a.time < gs.time)
                 {
-                    a.time = control.gameState.time;
+                    a.time = gs.time;
                     a.animation();
                 }
-                if (b.time < control.gameState.time)
+                if (b.time < gs.time)
                 {
-                    b.time = control.gameState.time;
+                    b.time = gs.time;
                     b.animation();
                 }
             }
@@ -1347,15 +1379,21 @@ class MainMenuState extends State
 
     load()
     {
-        document.getElementById("startBtn").addEventListener("click", this.initializeGame, false);
-        document.getElementById("optionsBtn").addEventListener("click", this.showOptions, false);
-        document.getElementById("creditsBtn").addEventListener("click", this.showMainMenu, false);
+        document.getElementById("startBtn").addEventListener("click", 
+            this.initializeGame, false);
+        document.getElementById("optionsBtn").addEventListener("click", 
+            this.showOptions, false);
+        document.getElementById("backBtn").addEventListener("click", 
+            this.showMainMenu, false);
+        document.getElementById("sliderSize").addEventListener("change", 
+            this.changeScale, false);
     }
 
     unload()
     {
         control.mainMenuState.hide();
-        document.getElementById("creditsBtn").style.display = 'none';
+        document.getElementById("backBtn").style.display = 'none';
+        document.getElementById("sliderSize").style.display = 'none';
     }
 
     hide()
@@ -1364,23 +1402,29 @@ class MainMenuState extends State
         document.getElementById("optionsBtn").style.display = 'none';
     }
 
+    changeScale(){
+        let val = document.getElementById("sliderSize").value;
+        scaleCanvas(val, val);
+    }
+
     initializeGame()
     {
-        control.mainMenuState.hide();
         control.statesMachine.changeState("Game");
     }
 
     showOptions()
     {
         control.mainMenuState.hide();
-        document.getElementById("creditsBtn").style.display = 'block';
+        document.getElementById("backBtn").style.display = 'block';
+        document.getElementById("sliderSize").style.display = 'block';
     }
 
     showMainMenu()
     {
         document.getElementById("startBtn").style.display = 'block';
         document.getElementById("optionsBtn").style.display = 'block';
-        document.getElementById("creditsBtn").style.display = 'none';
+        document.getElementById("backBtn").style.display = 'none';
+        document.getElementById("sliderSize").style.display = 'none';
     }
 }
 
@@ -1404,8 +1448,12 @@ class GameOverState extends State
 
     load()
     {
-        document.getElementById("restartBtn").addEventListener("click", this.restart, false);
-        document.getElementById("mainMenuBtn").addEventListener("click", this.gotoMainMenu, false);
+        document.getElementById("restartLvlBtn").addEventListener("click", 
+            this.restartLevel, false);
+        document.getElementById("restartGameBtn").addEventListener("click", 
+            this.restartGame, false);
+        document.getElementById("mainMenuBtn").addEventListener("click", 
+            this.gotoMainMenu, false);
     }
 
     unload()
@@ -1418,21 +1466,32 @@ class GameOverState extends State
         control.statesMachine.changeState("MainMenu");
     }
 
-    restart()
+    restartLevel()
     {
-        control.gameOverState.hide();
+        let lvl = control.gameState.currentLevel;
+
+        control.statesMachine.changeState("Game");
+
+        control.clearCanvas();
+        control.gameState.loadLevel(lvl);
+    }
+
+    restartGame()
+    {
         control.statesMachine.changeState("Game");
     }
 
     hide()
     {
-        document.getElementById("restartBtn").style.display = 'none';
+        document.getElementById("restartLvlBtn").style.display = 'none';
+        document.getElementById("restartGameBtn").style.display = 'none';
         document.getElementById("mainMenuBtn").style.display = 'none';
     }
 
     showGameOver()
     {
-        document.getElementById("restartBtn").style.display = 'block';
+        document.getElementById("restartLvlBtn").style.display = 'block';
+        document.getElementById("restartGameBtn").style.display = 'block';
         document.getElementById("mainMenuBtn").style.display = 'block';
     }
 }
