@@ -19,16 +19,20 @@ o movimento pretendido.
 O programa foi reestruturado para poder ser mais extensivel e flexivel em
 futuras implementacoes, principalmente com adicao de novas classes para
 controlar os estados e o jogo em geral.
-
-01234567890123456789012345678901234567890123456789012345678901234567890123456789
  */
 
 // GLOBAL VARIABLES
 const SCORE_PER_GOLD = 100;
-const RESPAWN_TIME_BRICK = 8 * ANIMATION_EVENTS_PER_SECOND;
-const RESPAWN_TIME_ROBOT = 3 * ANIMATION_EVENTS_PER_SECOND;
-const HERO_SHOOT_ANIM = 500;
-const ROBOT_DUMB_ANIM = 1000;
+
+// const RESPAWN_TIME_BRICK = 8 * ANIMATION_EVENTS_PER_SECOND; // doesnt run on mooshak
+// const RESPAWN_TIME_ROBOT = 3 * ANIMATION_EVENTS_PER_SECOND;
+const RESPAWN_TIME_BRICK = 8 * 8; // ANIMATION_EVENTS_PER_SECOND units
+const RESPAWN_TIME_ROBOT = 3 * 8; // ANIMATION_EVENTS_PER_SECOND units
+
+const HERO_SHOOT_ANIM = 500; // milliseconds
+const ROBOT_DUMB_ANIM = 1000; // milliseconds
+// the robots after respawning, because they died in a hole made by the hero, 
+// dont move for awhile (dumb/stunned) 
 
 const directions =
 {
@@ -37,8 +41,6 @@ const directions =
     UP: "up",
     DOWN: "down"
 }
-
-// tente não definir mais nenhuma variável global
 
 let empty, hero, control;
 
@@ -80,6 +82,7 @@ class GameControl
         this.ctx = this.canvas.getContext("2d");
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
+        // please take a second to apprecciate how beautiful this is (despite the 1500 lines of code)
         this.statesMachine = new StatesMachine();
         this.mainMenuState = new MainMenuState();
         this.gameOverState = new GameOverState();
@@ -96,6 +99,7 @@ class GameControl
     }
 }
 
+// switch between the given images
 class Animation
 {
     constructor(images)
@@ -113,6 +117,8 @@ class Animation
     }
 }
 
+// keeps track of the 2 most recent blocks passed through
+// and calls func everytime the 2 functions are satisfied
 class ActorEvent
 {
     constructor(prev, cur, func, obj)
@@ -120,7 +126,8 @@ class ActorEvent
         this.previousBlockFunc = prev;
         this.currentBlockFunc = cur;
 
-        this.previousBlock = empty;
+        // starts with null and empty assuming the given actor has an empty block behind on spawn
+        this.previousBlock = null;
         this.currentBlock = empty;
 
         this.func = func;
@@ -146,8 +153,6 @@ class ActorEvent
     }
 }
 
-// ACTORS
-
 class Actor
 {
     constructor(x, y, imageName)
@@ -168,13 +173,13 @@ class Actor
     isSolid()
     {
         return false;
-    } //o metodo esta aqui para garantir a possibilidade de que, no futuro,
-    //possam haver atores diferentes que imponham restricoes
-    // de passagem ao heroi
+    } // should be here in case we want to add an active actor that one is not able to pass through
+
     isClimbable()
     {
         return false;
-    }
+    } // same here
+
     isEmpty()
     {
         return false;
@@ -195,7 +200,7 @@ class Actor
     isKind()
     {
         return false;
-    }
+    } // the hero is a kind and generous actor :)
 }
 
 class PassiveActor extends Actor
@@ -249,50 +254,27 @@ class ActiveActor extends Actor
         this.moveDirection = directions.LEFT;
         this.items = [];
 
+        // two-block animations (ex. going through a ladder comming from an empty block)
         this.transitions = [
-            this.climbTrans = new ActorEvent(function (x)
-                {
-                    return true;
-                },
-                    function (x)
-                {
-                    return x.isClimbable() && x.isVisible();
-                },
-                    this.climb,
-                    this),
+            this.climbTrans = new ActorEvent(
+                function (x) { return true; },
+                function (x) { return x.isClimbable() && x.isVisible(); }, 
+                this.climb, this),
 
-            this.leaveClimb = new ActorEvent(function (x)
-                {
-                    return x.isClimbable();
-                },
-                    function (x)
-                {
-                    return x.isEmpty();
-                },
-                    this.lclimb,
-                    this),
+            this.leaveClimb = new ActorEvent(
+                function (x) { return x.isClimbable(); }, 
+                function (x) { return x.isEmpty(); },
+                this.lclimb, this),
 
-            this.runningTrans = new ActorEvent(function (x)
-                {
-                    return x.isEmpty() || x.isGrabable() || x.isItem();
-                },
-                    function (x)
-                {
-                    return x.isEmpty();
-                },
-                    this.run,
-                    this),
+            this.runningTrans = new ActorEvent(
+                function (x) { return x.isEmpty() || x.isGrabable() || x.isItem(); }, 
+                function (x) { return x.isEmpty(); },
+                this.run, this),
 
-            this.grabTrans = new ActorEvent(function (x)
-                {
-                    return true;
-                },
-                    function (x)
-                {
-                    return x.isGrabable();
-                },
-                    this.grab,
-                    this)
+            this.grabTrans = new ActorEvent(
+                function (x) { return true; }, 
+                function (x) { return x.isGrabable(); },
+                this.grab, this)
         ]
     }
 
@@ -334,10 +316,10 @@ class ActiveActor extends Actor
 
     move(dx, dy)
     {
+        // check if direction of movement is changing
         let aux =
             (this.moveDirection === directions.RIGHT && dx < 0
              || this.moveDirection === directions.LEFT && dx > 0);
-        //fica true caso ele queira mudar de direcao
 
         if (dx > 0)
             this.moveDirection = directions.RIGHT;
@@ -346,6 +328,7 @@ class ActiveActor extends Actor
 
         this.checkTransitions(dx, dy);
 
+        // dont move, just change sprite
         if (aux)
         {
             let current = control.gameState.getBehind(this.x, this.y);
@@ -410,7 +393,7 @@ class ActiveActor extends Actor
     {
         if (this.isFalling())
         {
-            if (this.time % 3 == 0) //serve para atrasar o movimento de queda
+            if (this.time % 3 == 0) // slow down fall
                 this.update(0, 1);
 
             let behind = control.gameState.getBehind(this.x, this.y);
@@ -419,8 +402,10 @@ class ActiveActor extends Actor
 
             this.falling = true;
         }
+
+        // stopped falling, sprite changes automatically
         if (this.falling && !this.isFalling())
-        { // stopped falling (is grounded)
+        {
             let behind = control.gameState.getBehind(this.x, this.y);
 
             if (!behind.isGrabable())
@@ -445,6 +430,7 @@ class Hero extends ActiveActor
         this.climbingAnimation = new Animation(["hero_on_ladder_left", "hero_on_ladder_right"]);
     }
 
+    // specialize all the animations (automatically called from super)
     climb(obj)
     {
         obj.imageName = obj.climbingAnimation.step();
@@ -505,6 +491,7 @@ class Hero extends ActiveActor
         control.statesMachine.changeState("GameOver");
     }
 
+    // should he have more lives? no
     hurt()
     {
         this.die();
@@ -523,6 +510,7 @@ class Hero extends ActiveActor
 
         super.move(dx, dy);
 
+        // yooo next level
         if (this.y === 0 && this.items.length === control.gameState.grabedItems 
             && current.isClimbable())
             control.gameState.loadNextLevel();
@@ -571,6 +559,7 @@ class Hero extends ActiveActor
 
             this.shooting();
             this.updateImg();
+            // move (0, 0) will set the image back to normal
             setTimeout(function ()
             {
                 hero.move(0, 0);
@@ -580,7 +569,6 @@ class Hero extends ActiveActor
 
     animation()
     {
-
         let atFeet = control.gameState.get(this.x, this.y + 1);
         if (atFeet.isDeadly() && this.isFalling())
             this.hurt();
@@ -592,7 +580,6 @@ class Hero extends ActiveActor
         if (k == ' ')
         {
             this.shoot();
-            //alert('SHOOT');
             return;
         }
         else
@@ -609,16 +596,6 @@ class Hero extends ActiveActor
         return true;
     }
 }
-
-// class Respawnable extends PassiveActor
-// {
-//     constructor(x, y, image)
-//     {
-//         super(x, y, image);
-//         this.timeOfBreak = -1;
-//         this.respawnTime = respawnTime;
-//     }
-// }
 
 class Robot extends ActiveActor
 {
@@ -707,6 +684,7 @@ class Robot extends ActiveActor
 
         if (oldCoords != newCoords && next.isKind())
         {
+            // commit murder
             next.hurt();
             this.show();
         }
@@ -714,11 +692,11 @@ class Robot extends ActiveActor
 
     animation()
     {
-
         if (!this.stunned)
         {
             let current = control.gameState.getBehind(this.x, this.y);
 
+            // get trapped
             if (current.isBreakable() && current.isBroken())
             {
                 this.timeOfStun = this.time;
@@ -737,6 +715,7 @@ class Robot extends ActiveActor
                 super.animation();
         }
 
+        // get out of the hole
         if (!this.dumbTime && this.stunned &&
             (this.time - this.timeOfStun > this.respawnTime))
         {
@@ -760,7 +739,7 @@ class Robot extends ActiveActor
 
             let prevBlock = control.gameState.getBehind(this.x, this.y);
 
-            this.update(mov <= -1 ? -1 : 1, -1); // avoid falling in same hole again
+            this.update(mov <= -1 ? -1 : 1, -1);
             prevBlock.reGrow();
             this.grabItem();
         }
@@ -776,6 +755,7 @@ class Robot extends ActiveActor
 
         let oldCoords = [this.x, this.y];
 
+        // try to move on y axis
         if (this.y > y)
             this.move(0, -1);
         else if (this.y < y)
@@ -783,6 +763,7 @@ class Robot extends ActiveActor
 
         let newCoords = [this.x, this.y];
 
+        // if didnt move on y axis move on x
         if (oldCoords != newCoords)
         {
             if (this.x > x)
@@ -808,6 +789,10 @@ class Robot extends ActiveActor
     }
 
 }
+
+// class Respawnable extends PassiveActor
+// {
+// }
 
 class Breakable extends PassiveActor
 {
@@ -1041,9 +1026,9 @@ class BoundaryStone extends Stone
     }
 }
 
+// manager to switch between states
 class StatesMachine
 {
-
     constructor()
     {
         this.currentState = null;
@@ -1072,15 +1057,13 @@ class StatesMachine
         if (oldState !== null)
             this.states.get(oldState).unload();
 
+        this.states.get(this.currentState).load();
+
         if (this.activeStates.has(this.currentState))
-        {
-            this.states.get(this.currentState).load();
             this.states.get(this.currentState).onSwitch(oldState);
-        }
         else
         {
             this.activeStates.set(this.currentState, this.states[this.currentState]);
-            this.states.get(this.currentState).load();
             this.states.get(this.currentState).onCreate();
         }
     }
@@ -1117,6 +1100,27 @@ class GameState extends State
         super();
     }
 
+    onCreate()
+    {
+        this.boundaryStone = new BoundaryStone();
+
+        this.key = 0;
+        this.score = 0;
+
+        this.time = 0;
+
+        empty = new Empty();
+
+        this.world = this.createMatrix();
+        this.worldActive = this.createMatrix();
+
+        this.currentLevel = 1;
+        this.reloadLevel();
+
+        this.invisibleLadder = [];
+        this.grabedItems = this.getValue();
+    }
+
     isInside(x, y)
     {
         return (x >= 0 && x < WORLD_WIDTH && y >= 0 && y < WORLD_HEIGHT)
@@ -1133,6 +1137,7 @@ class GameState extends State
             return aux;
     }
 
+    // return the number of items (gold) on the world and store invisible ladder positions
     getValue()
     {
         control.gameState.invisibleLadder = [];
@@ -1213,12 +1218,14 @@ class GameState extends State
 
         this.interval = setInterval(this.animationEvent, 1000 / ANIMATION_EVENTS_PER_SECOND);
 
+        // HTML stuff
         document.getElementById("nextLevelBtn").addEventListener("click", 
             this.loadNextLevel, false);
         document.getElementById("prevLevelBtn").addEventListener("click", 
             this.loadPreviousLevel, false);
         document.getElementById("reloadLevelBtn").addEventListener("click", 
             this.reloadLevel, false);
+
         document.getElementById("nextLevelBtn").style.display = "block";
         document.getElementById("prevLevelBtn").style.display = "block";
         document.getElementById("reloadLevelBtn").style.display = "block";
@@ -1230,36 +1237,17 @@ class GameState extends State
         removeEventListener("keyup", this.keyUpEvent, false);
         clearInterval(this.interval);
 
+        // HTML stuff
         document.getElementById("nextLevelBtn").removeEventListener("click", 
             this.loadNextLevel, false);
         document.getElementById("nextLevelBtn").removeEventListener("click", 
             this.loadPreviousLevel, false);
         document.getElementById("reloadLevelBtn").removeEventListener("click", 
             this.reloadLevel, false);
+
         document.getElementById("nextLevelBtn").style.display = "none";
         document.getElementById("prevLevelBtn").style.display = "none";
         document.getElementById("reloadLevelBtn").style.display = "none";
-    }
-
-    onCreate()
-    {
-        this.boundaryStone = new BoundaryStone();
-
-        this.key = 0;
-        this.score = 0;
-
-        this.time = 0;
-
-        empty = new Empty(); // only one empty actor needed
-
-        this.world = this.createMatrix();
-        this.worldActive = this.createMatrix();
-
-        this.currentLevel = 1;
-        this.reloadLevel();
-
-        this.invisibleLadder = [];
-        this.grabedItems = this.getValue();
     }
 
     onSwitch(otherState)
@@ -1267,8 +1255,9 @@ class GameState extends State
         this.onCreate();
     }
 
+    // stored by columns
     createMatrix()
-    { // stored by columns
+    {
         let matrix = new Array(WORLD_WIDTH);
         for (let x = 0; x < WORLD_WIDTH; x++)
         {
@@ -1323,10 +1312,10 @@ class GameState extends State
             return " ";
         default:
             return null;
-            // http://www.cambiaresearch.com/articles/15/javascript-char-codes-key-codes
         };
     }
 
+    // animate both active and passive world
     animationEvent()
     {
         let gs = control.gameState;
