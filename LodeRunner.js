@@ -1,7 +1,7 @@
 /*     Lode Runner
 
-Aluno 1: 55622 Miguel França <-- mandatory to fill
-Aluno 2: 55926 Joao Palmeiro <-- mandatory to fill
+Aluno 1: 55622 Miguel França
+Aluno 2: 55926 Joao Palmeiro
 
 Comentario:
 
@@ -12,11 +12,11 @@ foram feitas e das que não foram feitas (para facilitar uma correção
 sem enganos); ainda possivelmente alertando para alguns aspetos da
 implementação que possam ser menos óbvios para o avaliador.
 
-Programa feito na totalidade. E possivel realizar praticamente todas as acoes 
-descritas no enunciado, com excecao de alguns casos pontuais em que exista 
+Programa feito na totalidade. E possivel realizar praticamente todas as acoes
+descritas no enunciado, com excecao de alguns casos pontuais em que exista
 ainda um bug, que impossibilite que se mostre a imagem certa ou que se realize
 o movimento pretendido.
-O programa foi reestruturado para poder ser mais extensivel e flexivel em 
+O programa foi reestruturado para poder ser mais extensivel e flexivel em
 futuras implementacoes, principalmente com adicao de novas classes para
 controlar os estados e o jogo em geral.
 
@@ -77,7 +77,10 @@ class GameControl
 
         this.statesMachine = new StatesMachine();
         this.mainMenuState = new MainMenuState();
+        this.gameOverState = new GameOverState();
         this.gameState = new GameState();
+
+        this.statesMachine.addState("GameOver", this.gameOverState);
         this.statesMachine.addState("Game", this.gameState);
         this.statesMachine.changeState("MainMenu", this.mainMenuState);
     }
@@ -176,13 +179,15 @@ class Actor
         return false;
     }
 
-    isDeadly(){
+    isDeadly()
+    {
         return false;
     }
 
     animation() {}
 
-    isKind() {
+    isKind()
+    {
         return false;
     }
 }
@@ -300,7 +305,6 @@ class ActiveActor extends Actor
     die()
     {
         this.hide();
-        console.log("died");
     }
 
     update(dx, dy)
@@ -325,8 +329,8 @@ class ActiveActor extends Actor
     move(dx, dy)
     {
         let aux =
-            (this.moveDirection === directions.RIGHT && dx < 0 
-          || this.moveDirection === directions.LEFT && dx > 0);
+            (this.moveDirection === directions.RIGHT && dx < 0
+             || this.moveDirection === directions.LEFT && dx > 0);
         //fica true caso ele queira mudar de direcao
 
         if (dx > 0)
@@ -393,7 +397,7 @@ class ActiveActor extends Actor
         let atFeet = control.gameState.get(this.x, this.y + 1);
 
         return !behind.isGrabable() && atFeet.isFellable()
-            && !atFeet.isClimbable() && !behind.isClimbable();
+         && !atFeet.isClimbable() && !behind.isClimbable();
     }
 
     animation()
@@ -489,9 +493,14 @@ class Hero extends ActiveActor
             this.imageName = "hero_shoots_right";
     }
 
-    hurt(){
+    die(){
+        super.die();
+        control.statesMachine.changeState("GameOver");
+    }
+
+    hurt()
+    {
         this.die();
-        fatalError ("You died");
     }
 
     move(dx, dy)
@@ -523,13 +532,8 @@ class Hero extends ActiveActor
             control.gameState.score += SCORE_PER_GOLD;
         }
 
-            console.log(this.items.length);
-            console.log(control.gameState.grabedItems);
         if (this.items.length === control.gameState.grabedItems)
-        {
-
             control.gameState.makeLadderVisible();
-        }
     }
 
     shoot()
@@ -568,7 +572,7 @@ class Hero extends ActiveActor
     animation()
     {
 
-        let atFeet = control.gameState.get (this.x, this.y +1);
+        let atFeet = control.gameState.get(this.x, this.y + 1);
         if (atFeet.isDeadly() && this.isFalling())
             this.hurt();
 
@@ -591,7 +595,8 @@ class Hero extends ActiveActor
             }
     }
 
-    isKind(){
+    isKind()
+    {
         return true;
     }
 }
@@ -684,12 +689,17 @@ class Robot extends ActiveActor
     move(dx, dy)
     {
         let next = control.gameState.get(this.x + dx, this.y + dy);
-
-        if(next.isKind())
-            next.hurt();
+        let oldCoords = [this.x, this.y];
 
         if (!(next.isDeadly()))
             super.move(dx, dy);
+
+        let newCoords = [this.x, this.y];
+
+        if (oldCoords != newCoords && next.isKind()){
+            next.hurt();
+            this.show();
+        }
     }
 
     animation()
@@ -717,7 +727,7 @@ class Robot extends ActiveActor
                 super.animation();
         }
 
-        if (!this.dumbTime && this.stunned && 
+        if (!this.dumbTime && this.stunned &&
             (this.time - this.timeOfStun > this.respawnTime))
         {
             setTimeout((function (robot)
@@ -741,7 +751,8 @@ class Robot extends ActiveActor
             this.grabItem();
         }
 
-        this.decideMovement(hero.x, hero.y);
+        if (!this.isFalling())
+            this.decideMovement(hero.x, hero.y);
     }
 
     decideMovement(x, y)
@@ -1038,17 +1049,17 @@ class StatesMachine
         this.currentState = name;
 
         if (oldState != null)
-            this.states.get(oldState).unloadEvents();
+            this.states.get(oldState).unload();
 
         if (this.activeStates.has(this.currentState))
         {
-            this.states.get(this.currentState).loadEvents();
+            this.states.get(this.currentState).load();
             this.states.get(this.currentState).onSwitch(oldState);
         }
         else
         {
             this.activeStates.set(this.currentState, this.states[this.currentState]);
-            this.states.get(this.currentState).loadEvents();
+            this.states.get(this.currentState).load();
             this.states.get(this.currentState).onCreate();
         }
     }
@@ -1067,8 +1078,8 @@ class State
 {
     constructor() {}
 
-    loadEvents() {}
-    unloadEvents() {}
+    load() {}
+    unload() {}
 
     onCreate() {}
 
@@ -1171,7 +1182,7 @@ class GameState extends State
         control.gameState.loadLevel(control.gameState.currentLevel);
     }
 
-    loadEvents()
+    load()
     {
         addEventListener("keydown", this.keyDownEvent, false);
         addEventListener("keyup", this.keyUpEvent, false);
@@ -1186,10 +1197,10 @@ class GameState extends State
         document.getElementById("reloadLevelBtn").style.display = "block";
     }
 
-    unloadEvents()
+    unload()
     {
         removeEventListener("keydown", this.keyDownEvent, false);
-        removeaddEventListener("keyup", this.keyUpEvent, false);
+        removeEventListener("keyup", this.keyUpEvent, false);
         clearInterval(this.interval);
 
         document.getElementById("nextLevelBtn").removeEventListener("click", this.loadNextLevel, false);
@@ -1219,6 +1230,11 @@ class GameState extends State
 
         this.invisibleLadder = [];
         this.grabedItems = this.getValue();
+    }
+
+    onSwitch(otherState)
+    {
+        this.onCreate();
     }
 
     createMatrix()
@@ -1320,6 +1336,7 @@ class MainMenuState extends State
 
     onCreate()
     {
+        control.clearCanvas();
         this.showMainMenu();
     }
 
@@ -1328,24 +1345,34 @@ class MainMenuState extends State
         this.onCreate();
     }
 
-    loadEvents()
+    load()
     {
         document.getElementById("startBtn").addEventListener("click", this.initializeGame, false);
         document.getElementById("optionsBtn").addEventListener("click", this.showOptions, false);
         document.getElementById("creditsBtn").addEventListener("click", this.showMainMenu, false);
     }
 
-    initializeGame()
+    unload()
+    {
+        control.mainMenuState.hide();
+        document.getElementById("creditsBtn").style.display = 'none';
+    }
+
+    hide()
     {
         document.getElementById("startBtn").style.display = 'none';
         document.getElementById("optionsBtn").style.display = 'none';
+    }
+
+    initializeGame()
+    {
+        control.mainMenuState.hide();
         control.statesMachine.changeState("Game");
     }
 
     showOptions()
     {
-        document.getElementById("startBtn").style.display = 'none';
-        document.getElementById("optionsBtn").style.display = 'none';
+        control.mainMenuState.hide();
         document.getElementById("creditsBtn").style.display = 'block';
     }
 
@@ -1354,5 +1381,58 @@ class MainMenuState extends State
         document.getElementById("startBtn").style.display = 'block';
         document.getElementById("optionsBtn").style.display = 'block';
         document.getElementById("creditsBtn").style.display = 'none';
+    }
+}
+
+class GameOverState extends State
+{
+    constructor()
+    {
+        super();
+        this.hide();
+    }
+
+    onCreate()
+    {
+        this.showGameOver();
+    }
+
+    onSwitch(oldState)
+    {
+        this.onCreate();
+    }
+
+    load()
+    {
+        document.getElementById("restartBtn").addEventListener("click", this.restart, false);
+        document.getElementById("mainMenuBtn").addEventListener("click", this.gotoMainMenu, false);
+    }
+
+    unload()
+    {
+        control.gameOverState.hide();
+    }
+
+    gotoMainMenu()
+    {
+        control.statesMachine.changeState("MainMenu");
+    }
+
+    restart()
+    {
+        control.gameOverState.hide();
+        control.statesMachine.changeState("Game");
+    }
+
+    hide()
+    {
+        document.getElementById("restartBtn").style.display = 'none';
+        document.getElementById("mainMenuBtn").style.display = 'none';
+    }
+
+    showGameOver()
+    {
+        document.getElementById("restartBtn").style.display = 'block';
+        document.getElementById("mainMenuBtn").style.display = 'block';
     }
 }
