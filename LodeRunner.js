@@ -1,7 +1,7 @@
 /*     Lode Runner
 
-Aluno 1: ?number ?name <-- mandatory to fill
-Aluno 2: ?number ?name <-- mandatory to fill
+Aluno 1: 55622 Miguel França <-- mandatory to fill
+Aluno 2: 55926 Joao Palmeiro <-- mandatory to fill
 
 Comentario:
 
@@ -11,6 +11,14 @@ realizaram o projeto; indicação de quais as partes do trabalho que
 foram feitas e das que não foram feitas (para facilitar uma correção
 sem enganos); ainda possivelmente alertando para alguns aspetos da
 implementação que possam ser menos óbvios para o avaliador.
+
+Programa feito na totalidade. E possivel realizar praticamente todas as acoes 
+descritas no enunciado, com excecao de alguns casos pontuais em que exista 
+ainda um bug, que impossibilite que se mostre a imagem certa ou que se realize
+o movimento pretendido.
+O programa foi reestruturado para poder ser mais extensivel e flexivel em 
+futuras implementacoes, principalmente com adicao de novas classes para
+controlar os estados e o jogo em geral.
 
 01234567890123456789012345678901234567890123456789012345678901234567890123456789
  */
@@ -173,6 +181,10 @@ class Actor
     }
 
     animation() {}
+
+    isKind() {
+        return false;
+    }
 }
 
 class PassiveActor extends Actor
@@ -313,7 +325,8 @@ class ActiveActor extends Actor
     move(dx, dy)
     {
         let aux =
-            (this.moveDirection === directions.RIGHT && dx < 0 || this.moveDirection === directions.LEFT && dx > 0);
+            (this.moveDirection === directions.RIGHT && dx < 0 
+          || this.moveDirection === directions.LEFT && dx > 0);
         //fica true caso ele queira mudar de direcao
 
         if (dx > 0)
@@ -379,7 +392,8 @@ class ActiveActor extends Actor
         let behind = control.gameState.getBehind(this.x, this.y);
         let atFeet = control.gameState.get(this.x, this.y + 1);
 
-        return !behind.isGrabable() && atFeet.isFellable() && !atFeet.isClimbable() && !behind.isClimbable();
+        return !behind.isGrabable() && atFeet.isFellable()
+            && !atFeet.isClimbable() && !behind.isClimbable();
     }
 
     animation()
@@ -388,6 +402,10 @@ class ActiveActor extends Actor
         {
             if (this.time % 3 == 0) //serve para atrasar o movimento de queda
                 this.update(0, 1);
+
+            let behind = control.gameState.getBehind(this.x, this.y);
+            if (behind.isItem())
+                this.grabItem();
 
             this.falling = true;
         }
@@ -473,6 +491,7 @@ class Hero extends ActiveActor
 
     hurt(){
         this.die();
+        fatalError ("You died");
     }
 
     move(dx, dy)
@@ -504,8 +523,11 @@ class Hero extends ActiveActor
             control.gameState.score += SCORE_PER_GOLD;
         }
 
+            console.log(this.items.length);
+            console.log(control.gameState.grabedItems);
         if (this.items.length === control.gameState.grabedItems)
         {
+
             control.gameState.makeLadderVisible();
         }
     }
@@ -545,6 +567,11 @@ class Hero extends ActiveActor
 
     animation()
     {
+
+        let atFeet = control.gameState.get (this.x, this.y +1);
+        if (atFeet.isDeadly() && this.isFalling())
+            this.hurt();
+
         super.animation();
 
         let k = control.gameState.getKey();
@@ -562,6 +589,10 @@ class Hero extends ActiveActor
 
                 this.move(dx, dy);
             }
+    }
+
+    isKind(){
+        return true;
     }
 }
 
@@ -654,10 +685,10 @@ class Robot extends ActiveActor
     {
         let next = control.gameState.get(this.x + dx, this.y + dy);
 
-        if(next instanceof Hero)
+        if(next.isKind())
             next.hurt();
 
-        if (!(next instanceof Robot))
+        if (!(next.isDeadly()))
             super.move(dx, dy);
     }
 
@@ -682,11 +713,12 @@ class Robot extends ActiveActor
             }
 
             let possibleFall = control.gameState.get(this.x, this.y + 1);
-            if (!(possibleFall instanceof Robot))
+            if (!(possibleFall.isDeadly()))
                 super.animation();
         }
 
-        if (!this.dumbTime && this.stunned && (this.time - this.timeOfStun > this.respawnTime))
+        if (!this.dumbTime && this.stunned && 
+            (this.time - this.timeOfStun > this.respawnTime))
         {
             setTimeout((function (robot)
                 {
@@ -706,7 +738,7 @@ class Robot extends ActiveActor
 
             let mov = (hero.x - this.x);
             this.update(mov <= -1 ? -1 : 1, -1); // avoid falling in same hole again
-
+            this.grabItem();
         }
 
         this.decideMovement(hero.x, hero.y);
@@ -749,6 +781,7 @@ class Robot extends ActiveActor
     {
         return true;
     }
+
 }
 
 class Breakable extends PassiveActor
@@ -1120,7 +1153,6 @@ class GameState extends State
             control.gameState.currentLevel++;
             control.gameState.loadLevel(control.gameState.currentLevel);
         }
-        control.gameState.grabedItems = control.gameState.getValue(); //atualiza o total de ouro daquele nivel
     }
 
     loadPreviousLevel()
@@ -1216,6 +1248,7 @@ class GameState extends State
                 // x/y reversed because map stored by lines
                 GameFactory.actorFromCode(map[y][x], x, y);
             }
+        this.grabedItems = this.getValue();
     }
 
     getKey()
