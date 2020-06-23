@@ -1,27 +1,18 @@
 /*     Lode Runner
 
-Aluno 1: 55622 Miguel França
-Aluno 2: 55926 Joao Palmeiro
+Authors: 55622 Miguel França, 55926 Joao Palmeiro
 
-Comentario:
+Comment:
 
-O ficheiro "LodeRunner.js" tem de incluir, logo nas primeiras linhas,
-um comentário inicial contendo: o nome e número dos dois alunos que
-realizaram o projeto; indicação de quais as partes do trabalho que
-foram feitas e das que não foram feitas (para facilitar uma correção
-sem enganos); ainda possivelmente alertando para alguns aspetos da
-implementação que possam ser menos óbvios para o avaliador.
-
-Programa feito na totalidade. E possivel realizar praticamente todas as acoes
-descritas no enunciado, com excecao de alguns casos pontuais em que exista
-ainda um bug, que impossibilite que se mostre a imagem certa ou que se realize
-o movimento pretendido.
-O programa foi reestruturado para poder ser mais extensivel e flexivel em
-futuras implementacoes, principalmente com adicao de novas classes para
-controlar os estados e o jogo em geral.
+The program is totally done. It is possible to execute all the actions
+expressed in the project statement, and some more, based on our creativity.
+The program was restructured to be more flexible and extensible for future
+implementations, by adding new classes to control certain aspects of the game
+and the created states to control it.
+Some of the other features are mentioned in the comments above the respective
+methods or classes.
  */
 
-// GLOBAL VARIABLES
 const SCORE_PER_GOLD = 100;
 
 // const RESPAWN_TIME_BRICK = 8 * ANIMATION_EVENTS_PER_SECOND; // doesnt run on mooshak
